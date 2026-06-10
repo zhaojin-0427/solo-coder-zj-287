@@ -96,14 +96,22 @@ const filterDateRange = ref(null)
 
 const loadData = async () => {
   try {
-    const params = {}
+    const params = {
+      page: page.value,
+      page_size: pageSize,
+    }
     if (filterPanelGroup.value) params.panel_group = filterPanelGroup.value
     if (filterDateRange.value && filterDateRange.value[0]) params.date_from = filterDateRange.value[0]
     if (filterDateRange.value && filterDateRange.value[1]) params.date_to = filterDateRange.value[1]
     const data = await api.dailyGeneration.list(params)
-    records.value = data
-    total.value = data.length
+    records.value = data.results || data
+    total.value = data.count !== undefined ? data.count : (data.length || 0)
   } catch (e) { console.error(e) }
+}
+
+const handlePageChange = (p) => {
+  page.value = p
+  loadData()
 }
 
 const handleImport = async () => {
@@ -118,7 +126,8 @@ const handleImport = async () => {
       panel_group: importPanelGroup.value,
       actual_kwh: importKwh.value,
     })
-    ElMessage.success('数据导入成功')
+    await api.calculateRevenue(importDate.value)
+    ElMessage.success('数据导入成功，收益已自动计算')
     await loadData()
   } catch (e) { ElMessage.error('导入失败') }
   finally { importing.value = false }

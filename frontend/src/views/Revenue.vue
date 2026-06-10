@@ -69,6 +69,15 @@
               </template>
             </el-table-column>
           </el-table>
+          <div style="margin-top:12px;text-align:right">
+            <el-pagination
+              v-model:current-page="page"
+              :page-size="pageSize"
+              :total="total"
+              layout="total, prev, pager, next"
+              @current-change="handlePageChange"
+            />
+          </div>
         </div>
       </el-col>
     </el-row>
@@ -119,6 +128,9 @@ const records = ref([])
 const prices = ref([])
 const filterPanelGroup = ref(null)
 const filterDateRange = ref(null)
+const page = ref(1)
+const pageSize = 20
+const total = ref(0)
 
 const priceTypeMap = {
   grid_buy_peak: '电网购电-峰时',
@@ -158,13 +170,23 @@ const compositionChartOption = computed(() => {
   }
 })
 
+const handlePageChange = (p) => {
+  page.value = p
+  loadData()
+}
+
 const loadData = async () => {
   try {
-    const params = {}
+    const params = {
+      page: page.value,
+      page_size: pageSize,
+    }
     if (filterPanelGroup.value) params.panel_group = filterPanelGroup.value
     if (filterDateRange.value && filterDateRange.value[0]) params.date_from = filterDateRange.value[0]
     if (filterDateRange.value && filterDateRange.value[1]) params.date_to = filterDateRange.value[1]
-    records.value = await api.revenueRecords.list(params)
+    const data = await api.revenueRecords.list(params)
+    records.value = data.results || data
+    total.value = data.count !== undefined ? data.count : (data.length || 0)
   } catch (e) { console.error(e) }
 }
 

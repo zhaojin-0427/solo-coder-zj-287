@@ -4,11 +4,18 @@ from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 from .models import Inverter, SolarPanelGroup, DailyGeneration, HouseholdUsage, ElectricityPrice, RevenueRecord
 from .serializers import (
     InverterSerializer, SolarPanelGroupSerializer, DailyGenerationSerializer,
     HouseholdUsageSerializer, ElectricityPriceSerializer, RevenueRecordSerializer
 )
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 
 SEASONAL_COEFFICIENTS = {
@@ -69,6 +76,7 @@ class SolarPanelGroupViewSet(viewsets.ModelViewSet):
 class DailyGenerationViewSet(viewsets.ModelViewSet):
     queryset = DailyGeneration.objects.all()
     serializer_class = DailyGenerationSerializer
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -107,6 +115,7 @@ class ElectricityPriceViewSet(viewsets.ModelViewSet):
 class RevenueRecordViewSet(viewsets.ModelViewSet):
     queryset = RevenueRecord.objects.all()
     serializer_class = RevenueRecordSerializer
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -122,66 +131,7 @@ class RevenueRecordViewSet(viewsets.ModelViewSet):
         return qs
 
 
-@api_view(['POST'])
-def import_generation_data(request):
-    data = request.data
-    if isinstance(data, list):
-        results = []
-        for item in data:
-            panel_group_id = item.get('panel_group')
-            dt = item.get('date')
-            actual_kwh = item.get('actual_kwh', 0)
-            try:
-                pg = SolarPanelGroup.objects.get(pk=panel_group_id)
-            except SolarPanelGroup.DoesNotExist:
-                continue
-            month = int(dt.split('-')[1]) if dt else date.today().month
-            inv_eff = pg.inverter.efficiency if pg.inverter else 98.0
-            theoretical_kwh = calc_theoretical_kwh(pg.capacity_kw, pg.install_angle, month, inv_eff)
-            sunshine = AVERAGE_SUNSHINE_HOURS.get(month, 6.0)
-            obj, created = DailyGeneration.objects.update_or_create(
-                panel_group=pg, date=dt,
-                defaults={
-                    'actual_kwh': actual_kwh,
-                    'theoretical_kwh': theoretical_kwh,
-                    'sunshine_hours': sunshine,
-                    'peak_kwh': item.get('peak_kwh', actual_kwh * 0.6),
-                    'valley_kwh': item.get('valley_kwh', actual_kwh * 0.4),
-                }
-            )
-            results.append(DailyGenerationSerializer(obj).data)
-        return Response(results, status=status.HTTP_201_CREATED)
-    else:
-        panel_group_id = data.get('panel_group')
-        dt = data.get('date')
-        actual_kwh = data.get('actual_kwh', 0)
-        try:
-            pg = SolarPanelGroup.objects.get(pk=panel_group_id)
-        except SolarPanelGroup.DoesNotExist:
-            return Response({'error': 'Panel group not found'}, status=status.HTTP_404_NOT_FOUND)
-        month = int(dt.split('-')[1]) if dt else date.today().month
-        inv_eff = pg.inverter.efficiency if pg.inverter else 98.0
-        theoretical_kwh = calc_theoretical_kwh(pg.capacity_kw, pg.install_angle, month, inv_eff)
-        sunshine = AVERAGE_SUNSHINE_HOURS.get(month, 6.0)
-        obj, created = DailyGeneration.objects.update_or_create(
-            panel_group=pg, date=dt,
-            defaults={
-                'actual_kwh': actual_kwh,
-                'theoretical_kwh': theoretical_kwh,
-                'sunshine_hours': sunshine,
-                'peak_kwh': data.get('peak_kwh', actual_kwh * 0.6),
-                'valley_kwh': data.get('valley_kwh', actual_kwh * 0.4),
-            }
-        )
-        return Response(DailyGenerationSerializer(obj).data, status=status.HTTP_201_CREATED)
-
-
-@api_view(['POST'])
-def calculate_revenue(request):
-    dt = request.data.get('date')
-    if not dt:
-        return Response({'error': 'Date is required'}, status=status.HTTP_400_BAD_REQUEST)
-
+def calc_revenue_for_date(dt):
     prices = {}
     for p in ElectricityPrice.objects.order_by('price_type', '-effective_date'):
         if p.price_type not in prices:
@@ -229,7 +179,78 @@ def calculate_revenue(request):
             }
         )
         results.append(RevenueRecordSerializer(obj).data)
+    return results
 
+
+@api_view(['POST'])
+def import_generation_data(request):
+    data = request.data
+    dates_to_calc = set()
+
+    if isinstance(data, list):
+        results = []
+        for item in data:
+            panel_group_id = item.get('panel_group')
+            dt = item.get('date')
+            actual_kwh = item.get('actual_kwh', 0)
+            try:
+                pg = SolarPanelGroup.objects.get(pk=panel_group_id)
+            except SolarPanelGroup.DoesNotExist:
+                continue
+            month = int(dt.split('-')[1]) if dt else date.today().month
+            inv_eff = pg.inverter.efficiency if pg.inverter else 98.0
+            theoretical_kwh = calc_theoretical_kwh(pg.capacity_kw, pg.install_angle, month, inv_eff)
+            sunshine = AVERAGE_SUNSHINE_HOURS.get(month, 6.0)
+            obj, created = DailyGeneration.objects.update_or_create(
+                panel_group=pg, date=dt,
+                defaults={
+                    'actual_kwh': actual_kwh,
+                    'theoretical_kwh': theoretical_kwh,
+                    'sunshine_hours': sunshine,
+                    'peak_kwh': item.get('peak_kwh', actual_kwh * 0.6),
+                    'valley_kwh': item.get('valley_kwh', actual_kwh * 0.4),
+                }
+            )
+            results.append(DailyGenerationSerializer(obj).data)
+            if dt:
+                dates_to_calc.add(dt)
+        for dt in dates_to_calc:
+            calc_revenue_for_date(dt)
+        return Response(results, status=status.HTTP_201_CREATED)
+    else:
+        panel_group_id = data.get('panel_group')
+        dt = data.get('date')
+        actual_kwh = data.get('actual_kwh', 0)
+        try:
+            pg = SolarPanelGroup.objects.get(pk=panel_group_id)
+        except SolarPanelGroup.DoesNotExist:
+            return Response({'error': 'Panel group not found'}, status=status.HTTP_404_NOT_FOUND)
+        month = int(dt.split('-')[1]) if dt else date.today().month
+        inv_eff = pg.inverter.efficiency if pg.inverter else 98.0
+        theoretical_kwh = calc_theoretical_kwh(pg.capacity_kw, pg.install_angle, month, inv_eff)
+        sunshine = AVERAGE_SUNSHINE_HOURS.get(month, 6.0)
+        obj, created = DailyGeneration.objects.update_or_create(
+            panel_group=pg, date=dt,
+            defaults={
+                'actual_kwh': actual_kwh,
+                'theoretical_kwh': theoretical_kwh,
+                'sunshine_hours': sunshine,
+                'peak_kwh': data.get('peak_kwh', actual_kwh * 0.6),
+                'valley_kwh': data.get('valley_kwh', actual_kwh * 0.4),
+            }
+        )
+        if dt:
+            calc_revenue_for_date(dt)
+        return Response(DailyGenerationSerializer(obj).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+def calculate_revenue(request):
+    dt = request.data.get('date')
+    if not dt:
+        return Response({'error': 'Date is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    results = calc_revenue_for_date(dt)
     return Response(results)
 
 
