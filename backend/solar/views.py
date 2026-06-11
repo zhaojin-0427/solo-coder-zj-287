@@ -79,6 +79,8 @@ def calc_theoretical_kwh(capacity_kw, angle, month, inverter_efficiency=0.98):
 
 
 def generate_diagnosis_for_panel_group(pg, target_date):
+    if isinstance(target_date, str):
+        target_date = date.fromisoformat(target_date)
     try:
         gen = DailyGeneration.objects.get(panel_group=pg, date=target_date)
     except DailyGeneration.DoesNotExist:
@@ -244,6 +246,8 @@ def generate_diagnosis_for_panel_group(pg, target_date):
 
 
 def generate_diagnosis_for_inverter(inv, target_date):
+    if isinstance(target_date, str):
+        target_date = date.fromisoformat(target_date)
     pgs = inv.panel_groups.all()
     if not pgs.exists():
         return None
@@ -532,6 +536,8 @@ class HealthDiagnosisViewSet(viewsets.ModelViewSet):
 
 
 def calc_revenue_for_date(dt):
+    if isinstance(dt, str):
+        dt = date.fromisoformat(dt)
     prices = {}
     for p in ElectricityPrice.objects.order_by('price_type', '-effective_date'):
         if p.price_type not in prices:
@@ -620,6 +626,8 @@ def import_generation_data(request):
             calc_revenue_for_date(dt)
         for dt in dates_to_diagnose:
             generate_diagnosis_for_date(dt)
+        for dt in dates_to_calc:
+            calculate_storage_schedule_for_date(dt)
         return Response(results, status=status.HTTP_201_CREATED)
     else:
         panel_group_id = data.get('panel_group')
@@ -646,6 +654,7 @@ def import_generation_data(request):
         if dt:
             calc_revenue_for_date(dt)
             generate_diagnosis_for_date(dt)
+            calculate_storage_schedule_for_date(dt)
         return Response(DailyGenerationSerializer(obj).data, status=status.HTTP_201_CREATED)
 
 
@@ -1228,6 +1237,8 @@ def has_battery_alerts(battery, target_date):
 
 
 def calculate_storage_schedule(battery, target_date):
+    if isinstance(target_date, str):
+        target_date = date.fromisoformat(target_date)
     prices = get_electricity_prices()
     capacity = battery.capacity_kwh
     max_charge = battery.max_charge_power_kw
@@ -1423,6 +1434,8 @@ def calculate_storage_schedule(battery, target_date):
 
 
 def calculate_storage_schedule_for_date(target_date):
+    if isinstance(target_date, str):
+        target_date = date.fromisoformat(target_date)
     results = []
     for battery in StorageBattery.objects.filter(enable_date__lte=target_date):
         if battery.status == 'maintenance':

@@ -244,7 +244,7 @@
               <div class="page-card-title">
                 <el-icon><TrendCharts /></el-icon> 24小时SOC变化曲线
               </div>
-              <v-chart :option="socCurveOption" class="chart-container" autoresize />
+              <v-chart :option="socCurveOption" :key="socChartKey" class="chart-container" autoresize />
             </div>
           </el-col>
           <el-col :span="10">
@@ -252,7 +252,7 @@
               <div class="page-card-title">
                 <el-icon><DataLine /></el-icon> 24小时充放电明细
               </div>
-              <v-chart :option="chargeDischargeOption" class="chart-container" autoresize />
+              <v-chart :option="chargeDischargeOption" :key="cdChartKey" class="chart-container" autoresize />
             </div>
           </el-col>
         </el-row>
@@ -263,7 +263,7 @@
               <div class="page-card-title">
                 <el-icon><PieChart /></el-icon> 收益构成分析
               </div>
-              <v-chart :option="profitPieOption" class="chart-container" autoresize />
+              <v-chart :option="profitPieOption" :key="pieChartKey" class="chart-container" autoresize />
             </div>
           </el-col>
           <el-col :span="12">
@@ -422,17 +422,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Refresh, View, Lightning, Calendar, DataLine, TrendCharts, PieChart, Wallet } from '@element-plus/icons-vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, LineChart, PieChart as PieChartType } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, MarkAreaComponent } from 'echarts/components'
+import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, MarkAreaComponent, TitleComponent } from 'echarts/components'
 import api from '../api'
 
-use([CanvasRenderer, BarChart, LineChart, PieChartType, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, MarkAreaComponent])
+use([CanvasRenderer, BarChart, LineChart, PieChartType, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, MarkAreaComponent, TitleComponent])
 
 const activeTab = ref('batteries')
 const loadingBatteries = ref(false)
@@ -449,6 +449,9 @@ const summary = ref({})
 const selectedSchedule = ref(null)
 const detailBatteryId = ref(null)
 const detailDate = ref(new Date().toISOString().slice(0, 10))
+const socChartKey = ref(0)
+const cdChartKey = ref(0)
+const pieChartKey = ref(0)
 
 const batteryDialogVisible = ref(false)
 const editingBattery = ref(null)
@@ -484,16 +487,16 @@ const statusTagType = (s) => {
 }
 
 const hourlyDetailList = computed(() => {
-  if (!selectedSchedule?.hourly_detail) return []
-  return Object.values(selectedSchedule.hourly_detail).sort((a, b) => a.hour - b.hour)
+  if (!selectedSchedule.value?.hourly_detail) return []
+  return Object.values(selectedSchedule.value.hourly_detail).sort((a, b) => a.hour - b.hour)
 })
 
 const socCurveOption = computed(() => {
-  if (!selectedSchedule?.hourly_soc) {
+  if (!selectedSchedule.value?.hourly_soc) {
     return { title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: '#94a3b8', fontSize: 14 } } }
   }
   const hours = Array.from({ length: 24 }, (_, i) => `${i}:00`)
-  const socs = selectedSchedule.hourly_soc
+  const socs = selectedSchedule.value.hourly_soc
   return {
     tooltip: { trigger: 'axis', formatter: (p) => `${p[0].name}<br/>SOC: ${p[0].value}%` },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
@@ -512,9 +515,9 @@ const socCurveOption = computed(() => {
         }
       },
       markLine: { silent: true, data: [
-        { yAxis: selectedSchedule?.battery ? (batteries.value.find(b => b.id === selectedSchedule.battery)?.soc_upper_limit || 90) : 90,
+        { yAxis: selectedSchedule.value?.battery ? (batteries.value.find(b => b.id === selectedSchedule.value.battery)?.soc_upper_limit || 90) : 90,
           label: { formatter: 'SOC上限' }, lineStyle: { color: '#22c55e', type: 'dashed' } },
-        { yAxis: selectedSchedule?.battery ? (batteries.value.find(b => b.id === selectedSchedule.battery)?.soc_lower_limit || 15) : 15,
+        { yAxis: selectedSchedule.value?.battery ? (batteries.value.find(b => b.id === selectedSchedule.value.battery)?.soc_lower_limit || 15) : 15,
           label: { formatter: 'SOC下限' }, lineStyle: { color: '#ef4444', type: 'dashed' } }
       ]}
     }]
@@ -522,11 +525,11 @@ const socCurveOption = computed(() => {
 })
 
 const chargeDischargeOption = computed(() => {
-  if (!selectedSchedule?.hourly_charge_discharge) {
+  if (!selectedSchedule.value?.hourly_charge_discharge) {
     return { title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: '#94a3b8', fontSize: 14 } } }
   }
   const hours = Array.from({ length: 24 }, (_, i) => `${i}:00`)
-  const data = selectedSchedule.hourly_charge_discharge
+  const data = selectedSchedule.value.hourly_charge_discharge
   return {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' },
       formatter: (p) => {
@@ -553,13 +556,13 @@ const chargeDischargeOption = computed(() => {
 })
 
 const profitPieOption = computed(() => {
-  if (!selectedSchedule) {
+  if (!selectedSchedule.value) {
     return { title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: '#94a3b8', fontSize: 14 } } }
   }
-  const peakSaving = Number(selectedSchedule.peak_discharge_saving || 0)
-  const incomeChange = Number(selectedSchedule.grid_income_change || 0)
-  const valleyCost = Number(selectedSchedule.valley_charge_cost || 0)
-  const otherGain = Math.max(0, Number(selectedSchedule.total_profit_diff || 0) - peakSaving - incomeChange + valleyCost)
+  const peakSaving = Number(selectedSchedule.value.peak_discharge_saving || 0)
+  const incomeChange = Number(selectedSchedule.value.grid_income_change || 0)
+  const valleyCost = Number(selectedSchedule.value.valley_charge_cost || 0)
+  const otherGain = Math.max(0, Number(selectedSchedule.value.total_profit_diff || 0) - peakSaving - incomeChange + valleyCost)
   return {
     tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
     legend: { bottom: 0, orient: 'horizontal' },
@@ -620,7 +623,10 @@ const loadDetailData = async () => {
     const res = await api.storageSchedules.list(params)
     const list = res.results || res
     if (list && list.length > 0) {
-      selectedSchedule.value = list[0]
+      selectedSchedule.value = { ...list[0] }
+      socChartKey.value++
+      cdChartKey.value++
+      pieChartKey.value++
     } else {
       selectedSchedule.value = null
       ElMessage.warning('该日期暂无调度记录，可点击"批量重算"生成')
@@ -752,10 +758,13 @@ const viewScheduleDetail = (row) => {
   setTimeout(() => loadDetailData(), 100)
 }
 
+watch([activeTab, detailBatteryId, detailDate], () => {
+  if (activeTab.value === 'detail' && detailBatteryId.value && detailDate.value) {
+    loadDetailData()
+  }
+})
+
 onMounted(async () => {
   await Promise.all([loadBatteries(), loadPanelGroups(), loadSummary(), loadSchedules()])
-  if (batteries.value.length > 0) {
-    await loadDetailData()
-  }
 })
 </script>
