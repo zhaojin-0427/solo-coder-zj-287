@@ -80,6 +80,7 @@ import { ref, onMounted } from 'vue'
 import { DataLine, TrendCharts } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import api from '../api'
+import { extractListData, extractTotalCount, buildPaginationParams, buildDateRangeParams } from '../utils/request'
 
 const panelGroups = ref([])
 const records = ref([])
@@ -96,16 +97,13 @@ const filterDateRange = ref(null)
 
 const loadData = async () => {
   try {
-    const params = {
-      page: page.value,
-      page_size: pageSize,
-    }
-    if (filterPanelGroup.value) params.panel_group = filterPanelGroup.value
-    if (filterDateRange.value && filterDateRange.value[0]) params.date_from = filterDateRange.value[0]
-    if (filterDateRange.value && filterDateRange.value[1]) params.date_to = filterDateRange.value[1]
+    const params = buildPaginationParams(page.value, pageSize, {
+      panel_group: filterPanelGroup.value || '',
+      ...buildDateRangeParams(filterDateRange.value)
+    })
     const data = await api.dailyGeneration.list(params)
-    records.value = data.results || data
-    total.value = data.count !== undefined ? data.count : (data.length || 0)
+    records.value = extractListData(data)
+    total.value = extractTotalCount(data)
   } catch (e) { console.error(e) }
 }
 
@@ -134,7 +132,7 @@ const handleImport = async () => {
 }
 
 onMounted(async () => {
-  panelGroups.value = await api.panelGroups.list()
+  panelGroups.value = extractListData(await api.panelGroups.list())
   await loadData()
 })
 </script>

@@ -431,6 +431,10 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, LineChart, PieChart as PieChartType } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, MarkAreaComponent, TitleComponent } from 'echarts/components'
 import api from '../api'
+import { BATTERY_STATUS_LABELS, BATTERY_STATUS_TAG_TYPES, getSocColor, getSocTagType, getProfitColor, THEME_COLORS } from '../utils/constants'
+import { formatKwh, formatMoney, formatHour, formatMonthDay } from '../utils/format'
+import { createLineChart, createBarChart, createPieChart, createEmptyChart } from '../utils/charts'
+import { extractListData, extractTotalCount, buildPaginationParams, buildDateRangeParams } from '../utils/request'
 
 use([CanvasRenderer, BarChart, LineChart, PieChartType, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, MarkAreaComponent, TitleComponent])
 
@@ -475,16 +479,8 @@ const recalcBattery = ref(null)
 const recalcDateRange = ref([])
 const recalculating = ref(false)
 
-const socTagType = (soc) => {
-  if (soc >= 60) return 'success'
-  if (soc >= 30) return 'warning'
-  return 'danger'
-}
-const statusTagType = (s) => {
-  if (s === 'normal') return 'success'
-  if (s === 'warning') return 'warning'
-  return 'info'
-}
+const socTagType = getSocTagType
+const statusTagType = (s) => BATTERY_STATUS_TAG_TYPES[s] || 'info'
 
 const hourlyDetailList = computed(() => {
   if (!selectedSchedule.value?.hourly_detail) return []
@@ -493,90 +489,96 @@ const hourlyDetailList = computed(() => {
 
 const socCurveOption = computed(() => {
   if (!selectedSchedule.value?.hourly_soc) {
-    return { title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: '#94a3b8', fontSize: 14 } } }
+    return createEmptyChart()
   }
-  const hours = Array.from({ length: 24 }, (_, i) => `${i}:00`)
+  const hours = Array.from({ length: 24 }, (_, i) => formatHour(i))
   const socs = selectedSchedule.value.hourly_soc
-  return {
-    tooltip: { trigger: 'axis', formatter: (p) => `${p[0].name}<br/>SOC: ${p[0].value}%` },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: hours, axisLabel: { fontSize: 10 } },
-    yAxis: { type: 'value', name: '%', min: 0, max: 100 },
-    series: [{
-      type: 'line', data: socs, smooth: true,
-      itemStyle: { color: '#8b5cf6' }, lineStyle: { width: 3 },
-      areaStyle: {
-        color: {
-          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(139,92,246,0.4)' },
-            { offset: 1, color: 'rgba(139,92,246,0.02)' }
-          ]
-        }
-      },
-      markLine: { silent: true, data: [
-        { yAxis: selectedSchedule.value?.battery ? (batteries.value.find(b => b.id === selectedSchedule.value.battery)?.soc_upper_limit || 90) : 90,
-          label: { formatter: 'SOC上限' }, lineStyle: { color: '#22c55e', type: 'dashed' } },
-        { yAxis: selectedSchedule.value?.battery ? (batteries.value.find(b => b.id === selectedSchedule.value.battery)?.soc_lower_limit || 15) : 15,
-          label: { formatter: 'SOC下限' }, lineStyle: { color: '#ef4444', type: 'dashed' } }
-      ]}
-    }]
-  }
+  const battery = selectedSchedule.value?.battery
+    ? batteries.value.find(b => b.id === selectedSchedule.value.battery)
+    : null
+  return createLineChart({
+    xData: hours,
+    yAxisName: '%',
+    yMin: 0,
+    yMax: 100,
+    lineColor: THEME_COLORS.purple,
+    areaStyle: true,
+    areaColor: THEME_COLORS.purple,
+    xAxis: { axisLabel: { fontSize: 10 } },
+    series: {
+      data: socs,
+      markLine: {
+        silent: true,
+        data: [
+          { yAxis: battery?.soc_upper_limit || 90, label: { formatter: 'SOC上限' }, lineStyle: { color: THEME_COLORS.success, type: 'dashed' } },
+          { yAxis: battery?.soc_lower_limit || 15, label: { formatter: 'SOC下限' }, lineStyle: { color: THEME_COLORS.danger, type: 'dashed' } }
+        ]
+      }
+    },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (p) => `${p[0].name}<br/>SOC: ${p[0].value}%`
+    }
+  })
 })
 
 const chargeDischargeOption = computed(() => {
   if (!selectedSchedule.value?.hourly_charge_discharge) {
-    return { title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: '#94a3b8', fontSize: 14 } } }
+    return createEmptyChart()
   }
-  const hours = Array.from({ length: 24 }, (_, i) => `${i}:00`)
+  const hours = Array.from({ length: 24 }, (_, i) => formatHour(i))
   const data = selectedSchedule.value.hourly_charge_discharge
-  return {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' },
-      formatter: (p) => {
-        const v = p[0].value
-        return `${p[0].name}<br/>${v >= 0 ? '充电' : '放电'}: ${Math.abs(v).toFixed(3)} kWh`
-      }
-    },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: hours, axisLabel: { fontSize: 10 } },
-    yAxis: { type: 'value', name: 'kWh' },
-    series: [{
-      type: 'bar', data: data, barWidth: '60%',
+  const maxVal = Math.max(...data.map(Math.abs))
+  return createBarChart({
+    xData: hours,
+    yAxisName: 'kWh',
+    xAxis: { axisLabel: { fontSize: 10 } },
+    series: {
+      data,
+      barWidth: '60%',
       itemStyle: {
-        color: (params) => params.value >= 0 ? '#06b6d4' : '#f97316'
+        color: (params) => params.value >= 0 ? THEME_COLORS.info : THEME_COLORS.orange
       },
-      label: { show: Math.abs(Math.max(...data.map(Math.abs))) > 2, position: 'top', fontSize: 9,
+      label: {
+        show: maxVal > 2,
+        position: 'top',
+        fontSize: 9,
         formatter: (p) => {
           if (Math.abs(p.value) < 0.5) return ''
           return Math.abs(p.value).toFixed(1)
         }
       }
-    }]
-  }
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (p) => {
+        const v = p[0].value
+        return `${p[0].name}<br/>${v >= 0 ? '充电' : '放电'}: ${Math.abs(v).toFixed(3)} kWh`
+      }
+    }
+  })
 })
 
 const profitPieOption = computed(() => {
   if (!selectedSchedule.value) {
-    return { title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: '#94a3b8', fontSize: 14 } } }
+    return createEmptyChart()
   }
   const peakSaving = Number(selectedSchedule.value.peak_discharge_saving || 0)
   const incomeChange = Number(selectedSchedule.value.grid_income_change || 0)
   const valleyCost = Number(selectedSchedule.value.valley_charge_cost || 0)
   const otherGain = Math.max(0, Number(selectedSchedule.value.total_profit_diff || 0) - peakSaving - incomeChange + valleyCost)
-  return {
-    tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
+  return createPieChart({
+    data: [
+      { value: Math.max(0, peakSaving), name: '峰时放电节省', itemStyle: { color: THEME_COLORS.success } },
+      { value: Math.max(0, incomeChange), name: '上网收益提升', itemStyle: { color: THEME_COLORS.primary } },
+      { value: Math.max(0, otherGain), name: '其他增益', itemStyle: { color: THEME_COLORS.purple } },
+      { value: valleyCost, name: '谷电成本(抵扣)', itemStyle: { color: THEME_COLORS.orange } },
+    ].filter(d => d.value > 0),
     legend: { bottom: 0, orient: 'horizontal' },
-    series: [{
-      type: 'pie', radius: ['40%', '70%'], center: ['50%', '42%'],
-      data: [
-        { value: Math.max(0, peakSaving), name: '峰时放电节省', itemStyle: { color: '#22c55e' } },
-        { value: Math.max(0, incomeChange), name: '上网收益提升', itemStyle: { color: '#3b82f6' } },
-        { value: Math.max(0, otherGain), name: '其他增益', itemStyle: { color: '#8b5cf6' } },
-        { value: valleyCost, name: '谷电成本(抵扣)', itemStyle: { color: '#f97316' } },
-      ].filter(d => d.value > 0),
-      label: { formatter: '{b}\n¥{c}' }
-    }]
-  }
+    label: { formatter: '{b}\n¥{c}' },
+    tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' }
+  })
 })
 
 const loadSummary = async () => {
@@ -598,20 +600,20 @@ const loadBatteries = async () => {
 
 const loadPanelGroups = async () => {
   try {
-    panelGroups.value = await api.panelGroups.list()
+    panelGroups.value = extractListData(await api.panelGroups.list())
   } catch (e) { console.error(e) }
 }
 
 const loadSchedules = async () => {
   loadingSchedules.value = true
   try {
-    const params = { page: schedulePage.value, page_size: schedulePageSize.value }
-    if (filterBatteryId.value) params.battery = filterBatteryId.value
-    if (filterDateRange.value?.[0]) params.date_from = filterDateRange.value[0]
-    if (filterDateRange.value?.[1]) params.date_to = filterDateRange.value[1]
+    const params = buildPaginationParams(schedulePage.value, schedulePageSize.value, {
+      battery: filterBatteryId.value || '',
+      ...buildDateRangeParams(filterDateRange.value)
+    })
     const res = await api.storageSchedules.list(params)
-    schedules.value = res.results || res
-    scheduleTotal.value = res.count || schedules.value.length
+    schedules.value = extractListData(res)
+    scheduleTotal.value = extractTotalCount(res)
   } catch (e) { console.error(e) }
   finally { loadingSchedules.value = false }
 }

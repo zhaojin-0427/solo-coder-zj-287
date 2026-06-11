@@ -224,11 +224,14 @@ import { BarChart, LineChart, PieChart as PieChartType } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent } from 'echarts/components'
 import { TrendCharts, Cpu, DataLine, PieChart, Timer } from '@element-plus/icons-vue'
 import api from '../api'
+import { ALERT_LEVEL_LABELS, ALERT_LEVEL_COLORS, getSocColor, getHealthColor, THEME_COLORS } from '../utils/constants'
+import { formatMonthDay } from '../utils/format'
+import { createDualAxisChart, createPieChart, createLineChart } from '../utils/charts'
 
 use([CanvasRenderer, BarChart, LineChart, PieChartType, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent])
 
-const levelLabelMap = { normal: '正常', low: '低', medium: '中', high: '高', critical: '严重' }
-const levelColorMap = { normal: '#22c55e', low: '#3b82f6', medium: '#f59e0b', high: '#f97316', critical: '#ef4444' }
+const levelLabelMap = ALERT_LEVEL_LABELS
+const levelColorMap = ALERT_LEVEL_COLORS
 
 const data = ref({
   total_capacity_kw: 0, today_generation_kwh: 0, today_theoretical_kwh: 0,
@@ -243,12 +246,7 @@ const data = ref({
   upcoming_cleaning_count: 0, latest_cleaning_revenue: 0
 })
 
-const socColor = (soc) => {
-  if (soc === '--' || soc == null || soc === 0) return '#64748b'
-  if (soc >= 60) return '#22c55e'
-  if (soc >= 30) return '#f59e0b'
-  return '#ef4444'
-}
+const socColor = getSocColor
 
 const todayHealthScore = computed(() => {
   const trend = data.value.health_score_trend
@@ -259,71 +257,63 @@ const todayHealthScore = computed(() => {
   return '--'
 })
 
-const todayHealthColor = computed(() => {
-  const score = todayHealthScore.value
-  if (score === '--') return '#64748b'
-  if (score >= 90) return '#22c55e'
-  if (score >= 70) return '#f59e0b'
-  return '#ef4444'
-})
+const todayHealthColor = computed(() => getHealthColor(todayHealthScore.value))
 
 const paybackColor = computed(() => {
   const pct = data.value.payback_pct
-  if (pct >= 80) return '#22c55e'
-  if (pct >= 50) return '#f59e0b'
-  return '#3b82f6'
+  if (pct >= 80) return THEME_COLORS.success
+  if (pct >= 50) return THEME_COLORS.warning
+  return THEME_COLORS.primary
 })
 
 const weekChartOption = computed(() => {
-  const days = data.value.recent_7_days
-  return {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { data: ['实际发电', '理论发电', '收益'], top: 0 },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: days.map(d => d.date.slice(5)) },
-    yAxis: [
-      { type: 'value', name: 'kWh', position: 'left' },
-      { type: 'value', name: '元', position: 'right' }
+  const days = data.value.recent_7_days || []
+  return createDualAxisChart({
+    xData: days.map(d => formatMonthDay(d.date)),
+    leftYAxisName: 'kWh',
+    rightYAxisName: '元',
+    leftSeries: [
+      { name: '实际发电', type: 'bar', data: days.map(d => d.actual_kwh), itemStyle: { color: THEME_COLORS.success } },
+      { name: '理论发电', type: 'bar', data: days.map(d => d.theoretical_kwh), itemStyle: { color: THEME_COLORS.primary, opacity: 0.5 } }
     ],
-    series: [
-      { name: '实际发电', type: 'bar', data: days.map(d => d.actual_kwh), itemStyle: { color: '#22c55e' } },
-      { name: '理论发电', type: 'bar', data: days.map(d => d.theoretical_kwh), itemStyle: { color: '#3b82f6', opacity: 0.5 } },
-      { name: '收益', type: 'line', yAxisIndex: 1, data: days.map(d => d.income), smooth: true, itemStyle: { color: '#f59e0b' }, lineStyle: { width: 3 } }
-    ]
-  }
+    rightSeries: [
+      { name: '收益', type: 'line', data: days.map(d => d.income), smooth: true, itemStyle: { color: THEME_COLORS.warning }, lineStyle: { width: 3 } }
+    ],
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } }
+  })
 })
 
-const selfUsePieOption = computed(() => ({
-  tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-  legend: { bottom: 0 },
-  series: [{
-    type: 'pie', radius: ['40%', '70%'], center: ['50%', '45%'],
-    data: [
-      { value: data.value.self_use_rate, name: '自用', itemStyle: { color: '#22c55e' } },
-      { value: 100 - data.value.self_use_rate, name: '上网', itemStyle: { color: '#3b82f6' } }
-    ],
-    label: { formatter: '{b}\n{d}%' },
-    emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.2)' } }
-  }]
+const selfUsePieOption = computed(() => createPieChart({
+  data: [
+    { value: data.value.self_use_rate, name: '自用', itemStyle: { color: THEME_COLORS.success } },
+    { value: 100 - data.value.self_use_rate, name: '上网', itemStyle: { color: THEME_COLORS.primary } }
+  ]
 }))
 
 const healthTrendOption = computed(() => {
   const trend = data.value.health_score_trend || []
-  return {
-    tooltip: { trigger: 'axis', formatter: (params) => {
-      const p = params[0]
-      return `${p.name}<br/>健康评分: ${p.value ?? '无数据'}`
-    }},
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: trend.map(d => d.date.slice(5)) },
-    yAxis: { type: 'value', name: '分', min: 0, max: 100 },
-    series: [{
-      type: 'line', data: trend.map(d => d.avg_health_score), smooth: true,
-      itemStyle: { color: '#8b5cf6' }, lineStyle: { width: 3 },
-      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(139,92,246,0.3)' }, { offset: 1, color: 'rgba(139,92,246,0.02)' }] } },
-      markLine: { data: [{ yAxis: 70, label: { formatter: '警戒线70' }, lineStyle: { color: '#ef4444', type: 'dashed' } }] }
-    }]
-  }
+  return createLineChart({
+    xData: trend.map(d => formatMonthDay(d.date)),
+    yAxisName: '分',
+    yMin: 0,
+    yMax: 100,
+    lineColor: THEME_COLORS.purple,
+    areaStyle: true,
+    areaColor: THEME_COLORS.purple,
+    series: {
+      data: trend.map(d => d.avg_health_score),
+      markLine: {
+        data: [{ yAxis: 70, label: { formatter: '警戒线70' }, lineStyle: { color: THEME_COLORS.danger, type: 'dashed' } }]
+      }
+    },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params) => {
+        const p = params[0]
+        return `${p.name}<br/>健康评分: ${p.value ?? '无数据'}`
+      }
+    }
+  })
 })
 
 onMounted(async () => {

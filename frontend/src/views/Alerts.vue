@@ -158,10 +158,12 @@ import { ref, onMounted } from 'vue'
 import { Bell, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
+import { ALERT_LEVEL_LABELS, ALERT_LEVEL_COLORS, ALERT_LEVEL_TAG_TYPES, getHealthColor } from '../utils/constants'
+import { extractListData, extractTotalCount, buildPaginationParams, buildDateRangeParams } from '../utils/request'
 
-const levelLabelMap = { normal: '正常', low: '低', medium: '中', high: '高', critical: '严重' }
-const levelColorMap = { normal: '#22c55e', low: '#3b82f6', medium: '#f59e0b', high: '#f97316', critical: '#ef4444' }
-const levelTagType = { normal: 'success', low: '', medium: 'warning', high: 'warning', critical: 'danger' }
+const levelLabelMap = ALERT_LEVEL_LABELS
+const levelColorMap = ALERT_LEVEL_COLORS
+const levelTagType = ALERT_LEVEL_TAG_TYPES
 
 const loading = ref(false)
 const alertList = ref([])
@@ -196,41 +198,25 @@ const currentAlert = ref(null)
 const loadDevices = async () => {
   try {
     const [pgRes, invRes] = await Promise.all([api.panelGroups.list(), api.inverters.list()])
-    panelGroups.value = pgRes.results || pgRes
-    inverters.value = invRes.results || invRes
+    panelGroups.value = extractListData(pgRes)
+    inverters.value = extractListData(invRes)
   } catch (e) { console.error(e) }
 }
 
 const loadData = async () => {
   loading.value = true
   try {
-    const params = {
-      page: currentPage.value,
-      page_size: pageSize.value,
-    }
-    if (filters.value.anomaly_level) {
-      params.anomaly_level = filters.value.anomaly_level
-    }
-    if (filters.value.device_type) {
-      params.device_type = filters.value.device_type
-    }
-    if (filters.value.device_id) {
-      params.device_id = filters.value.device_id
-    }
-    if (dateRange.value && dateRange.value[0]) {
-      params.date_from = dateRange.value[0]
-      params.date_to = dateRange.value[1]
-    }
-    params.is_handled = showHandled.value ? 'true' : 'false'
+    const params = buildPaginationParams(currentPage.value, pageSize.value, {
+      anomaly_level: filters.value.anomaly_level || '',
+      device_type: filters.value.device_type || '',
+      device_id: filters.value.device_id || '',
+      is_handled: showHandled.value ? 'true' : 'false',
+      ...buildDateRangeParams(dateRange.value)
+    })
 
     const res = await api.healthDiagnosis.list(params)
-    if (res.results) {
-      alertList.value = res.results
-      totalCount.value = res.count
-    } else {
-      alertList.value = Array.isArray(res) ? res : []
-      totalCount.value = alertList.value.length
-    }
+    alertList.value = extractListData(res)
+    totalCount.value = extractTotalCount(res)
   } catch (e) {
     console.error(e)
   } finally {

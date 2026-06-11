@@ -116,6 +116,8 @@ import { LineChart, BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent } from 'echarts/components'
 import { Timer, TrendCharts, Coin, DataLine } from '@element-plus/icons-vue'
 import api from '../api'
+import { THEME_COLORS } from '../utils/constants'
+import { createDualAxisChart } from '../utils/charts'
 
 use([CanvasRenderer, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent])
 
@@ -128,35 +130,36 @@ const data = ref({
 
 const paybackColor = computed(() => {
   const pct = data.value.payback_pct
-  if (pct >= 80) return '#22c55e'
-  if (pct >= 50) return '#f59e0b'
-  return '#3b82f6'
+  if (pct >= 80) return THEME_COLORS.success
+  if (pct >= 50) return THEME_COLORS.warning
+  return THEME_COLORS.primary
 })
 
 const projectionChartOption = computed(() => {
-  const proj = data.value.monthly_projection
-  return {
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['回本进度(%)', '累计收益(元)'], top: 0 },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: proj.map(p => p.month) },
-    yAxis: [
-      { type: 'value', name: '%', min: 0, max: 100, position: 'left' },
-      { type: 'value', name: '元', position: 'right' }
-    ],
-    series: [
+  const proj = data.value.monthly_projection || []
+  return createDualAxisChart({
+    xData: proj.map(p => p.month),
+    leftYAxisName: '%',
+    leftYMin: 0,
+    leftYMax: 100,
+    rightYAxisName: '元',
+    leftSeries: [
       {
         name: '回本进度(%)', type: 'line', data: proj.map(p => p.projected_pct),
-        smooth: true, itemStyle: { color: '#f59e0b' }, lineStyle: { width: 3 },
-        markLine: { data: [{ yAxis: 100, label: { formatter: '回本线' }, lineStyle: { color: '#22c55e', type: 'dashed' } }] }
-      },
+        smooth: true, itemStyle: { color: THEME_COLORS.warning }, lineStyle: { width: 3 },
+        markLine: {
+          data: [{ yAxis: 100, label: { formatter: '回本线' }, lineStyle: { color: THEME_COLORS.success, type: 'dashed' } }]
+        }
+      }
+    ],
+    rightSeries: [
       {
-        name: '累计收益(元)', type: 'bar', yAxisIndex: 1,
+        name: '累计收益(元)', type: 'bar',
         data: proj.map(p => p.projected_revenue),
-        itemStyle: { color: '#3b82f6', opacity: 0.6 }
+        itemStyle: { color: THEME_COLORS.primary, opacity: 0.6 }
       }
     ]
-  }
+  })
 })
 
 onMounted(async () => {

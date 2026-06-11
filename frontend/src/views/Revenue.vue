@@ -120,6 +120,9 @@ import { PieChart, BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import { Wallet, TrendCharts, Coin } from '@element-plus/icons-vue'
 import api from '../api'
+import { THEME_COLORS } from '../utils/constants'
+import { createPieChart } from '../utils/charts'
+import { extractListData, extractTotalCount, buildPaginationParams, buildDateRangeParams } from '../utils/request'
 
 use([CanvasRenderer, PieChart, BarChart, GridComponent, TooltipComponent, LegendComponent])
 
@@ -155,19 +158,14 @@ const summary = computed(() => {
 const compositionChartOption = computed(() => {
   const selfUse = records.value.reduce((s, r) => s + (r.self_use_saving || 0), 0)
   const gridSell = records.value.reduce((s, r) => s + (r.grid_sell_income || 0), 0)
-  return {
-    tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
-    legend: { bottom: 0 },
-    series: [{
-      type: 'pie', radius: ['40%', '70%'], center: ['50%', '45%'],
-      data: [
-        { value: selfUse.toFixed(2), name: '自用节省', itemStyle: { color: '#22c55e' } },
-        { value: gridSell.toFixed(2), name: '上网收益', itemStyle: { color: '#3b82f6' } }
-      ],
-      label: { formatter: '{b}\n¥{c}' },
-      emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' } }
-    }]
-  }
+  return createPieChart({
+    data: [
+      { value: selfUse.toFixed(2), name: '自用节省', itemStyle: { color: THEME_COLORS.success } },
+      { value: gridSell.toFixed(2), name: '上网收益', itemStyle: { color: THEME_COLORS.primary } }
+    ],
+    label: { formatter: '{b}\n¥{c}' },
+    tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' }
+  })
 })
 
 const handlePageChange = (p) => {
@@ -177,22 +175,19 @@ const handlePageChange = (p) => {
 
 const loadData = async () => {
   try {
-    const params = {
-      page: page.value,
-      page_size: pageSize,
-    }
-    if (filterPanelGroup.value) params.panel_group = filterPanelGroup.value
-    if (filterDateRange.value && filterDateRange.value[0]) params.date_from = filterDateRange.value[0]
-    if (filterDateRange.value && filterDateRange.value[1]) params.date_to = filterDateRange.value[1]
+    const params = buildPaginationParams(page.value, pageSize, {
+      panel_group: filterPanelGroup.value || '',
+      ...buildDateRangeParams(filterDateRange.value)
+    })
     const data = await api.revenueRecords.list(params)
-    records.value = data.results || data
-    total.value = data.count !== undefined ? data.count : (data.length || 0)
+    records.value = extractListData(data)
+    total.value = extractTotalCount(data)
   } catch (e) { console.error(e) }
 }
 
 onMounted(async () => {
-  panelGroups.value = await api.panelGroups.list()
-  prices.value = await api.electricityPrices.list()
+  panelGroups.value = extractListData(await api.panelGroups.list())
+  prices.value = extractListData(await api.electricityPrices.list())
   await loadData()
 })
 </script>

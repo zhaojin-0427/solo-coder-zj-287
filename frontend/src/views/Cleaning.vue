@@ -306,14 +306,23 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, Brush } from '@element-plus/icons-vue'
 import api from '../api'
+import {
+  CLEANING_STATUS_LABELS, CLEANING_STATUS_TAG_TYPES,
+  CLEANING_METHOD_LABELS,
+  EFFECTIVENESS_LABELS, EFFECTIVENESS_TAG_TYPES,
+  getHealthColor, THEME_COLORS
+} from '../utils/constants'
+import { formatMoney, formatKwh, formatPercent } from '../utils/format'
+import { createLineChart } from '../utils/charts'
+import { extractListData, extractTotalCount, buildPaginationParams, buildDateRangeParams } from '../utils/request'
 
 use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
-const statusLabelMap = { pending: '待执行', completed: '已完成', cancelled: '已取消' }
-const statusTagType = { pending: 'warning', completed: 'success', cancelled: 'info' }
-const methodLabelMap = { manual: '人工清洁', water: '水洗清洁', dry: '干洗清洁', robot: '机器人清洁', rain: '雨水自洁' }
-const effectivenessLabelMap = { excellent: '优秀', good: '良好', fair: '一般', poor: '较差', none: '未评估' }
-const effectivenessTagType = { excellent: 'success', good: 'primary', fair: 'warning', poor: 'danger', none: 'info' }
+const statusLabelMap = CLEANING_STATUS_LABELS
+const statusTagType = CLEANING_STATUS_TAG_TYPES
+const methodLabelMap = CLEANING_METHOD_LABELS
+const effectivenessLabelMap = EFFECTIVENESS_LABELS
+const effectivenessTagType = EFFECTIVENESS_TAG_TYPES
 
 const loading = ref(false)
 const planList = ref([])
@@ -360,44 +369,33 @@ const evalChartOption = computed(() => {
     ...preData.map(r => r.efficiency),
     ...postData.map(r => r.efficiency)
   ]
-  return {
-    tooltip: { trigger: 'axis', formatter: '{b}<br/>效率: {c}%' },
-    grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
-    xAxis: {
-      type: 'category',
-      data: dates,
-      axisLabel: { rotate: 35, fontSize: 10, interval: 0 }
-    },
-    yAxis: { type: 'value', name: '%', min: 0, max: 100 },
-    series: [{
-      type: 'line',
+  return createLineChart({
+    xData: dates,
+    yAxisName: '%',
+    yMin: 0,
+    yMax: 100,
+    lineColor: THEME_COLORS.primary,
+    areaStyle: true,
+    areaColor: THEME_COLORS.primary,
+    xAxis: { axisLabel: { rotate: 35, fontSize: 10, interval: 0 } },
+    grid: { bottom: '15%' },
+    series: {
       data: effs,
-      smooth: true,
-      itemStyle: { color: '#3b82f6' },
-      lineStyle: { width: 3 },
       markLine: {
         silent: true,
         data: [
-          { yAxis: evalDetail.pre_avg_efficiency, name: '清洁前平均', lineStyle: { color: '#ef4444' }, label: { formatter: '前均' + evalDetail.pre_avg_efficiency + '%' } },
-          { yAxis: evalDetail.post_avg_efficiency, name: '清洁后平均', lineStyle: { color: '#22c55e' }, label: { formatter: '后均' + evalDetail.post_avg_efficiency + '%' } }
+          { yAxis: evalDetail.pre_avg_efficiency, lineStyle: { color: THEME_COLORS.danger }, label: { formatter: '前均' + evalDetail.pre_avg_efficiency + '%' } },
+          { yAxis: evalDetail.post_avg_efficiency, lineStyle: { color: THEME_COLORS.success }, label: { formatter: '后均' + evalDetail.post_avg_efficiency + '%' } }
         ]
-      },
-      areaStyle: {
-        color: {
-          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(59,130,246,0.3)' },
-            { offset: 1, color: 'rgba(59,130,246,0.02)' }
-          ]
-        }
       }
-    }]
-  }
+    },
+    tooltip: { trigger: 'axis', formatter: '{b}<br/>效率: {c}%' }
+  })
 })
 
 const loadPanelGroups = async () => {
   try {
-    panelGroups.value = await api.panelGroups.list() || []
+    panelGroups.value = extractListData(await api.panelGroups.list())
   } catch (e) {
     console.error('load panel groups failed', e)
   }
@@ -414,19 +412,14 @@ const loadSummary = async () => {
 const loadData = async () => {
   loading.value = true
   try {
-    const params = {
-      page: currentPage.value,
-      page_size: pageSize.value,
-    }
-    if (statusTab.value) params.status = statusTab.value
-    if (filters.panel_group) params.panel_group = filters.panel_group
-    if (dateRange.value && dateRange.value.length === 2) {
-      params.date_from = dateRange.value[0]
-      params.date_to = dateRange.value[1]
-    }
+    const params = buildPaginationParams(currentPage.value, pageSize.value, {
+      status: statusTab.value || '',
+      panel_group: filters.panel_group || '',
+      ...buildDateRangeParams(dateRange.value)
+    })
     const res = await api.cleaningPlans.list(params)
-    planList.value = res.results || res || []
-    totalCount.value = res.count || planList.value.length
+    planList.value = extractListData(res)
+    totalCount.value = extractTotalCount(res)
   } catch (e) {
     ElMessage.error('加载数据失败')
   } finally {

@@ -185,6 +185,9 @@ import { BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent } from 'echarts/components'
 import { DataLine, TrendCharts, PieChart, Histogram, Warning, Odometer, Lightning, Coin, Brush } from '@element-plus/icons-vue'
 import api from '../api'
+import { THEME_COLORS, CHART_COLOR_PALETTE, getHealthColor } from '../utils/constants'
+import { formatMoney, formatKwh, formatPercent, formatNumber } from '../utils/format'
+import { createLineChart, createBarChart, createDualAxisChart, createHorizontalBarChart } from '../utils/charts'
 
 use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent])
 
@@ -200,139 +203,133 @@ const stats = ref({
 })
 
 const generationTrendOption = computed(() => {
-  const trend = stats.value.generation_trend
-  return {
-    tooltip: { trigger: 'axis' },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: trend.map(t => t.month) },
-    yAxis: { type: 'value', name: 'kWh' },
-    series: [{
-      type: 'bar', data: trend.map(t => t.kwh), itemStyle: {
-        color: (params) => {
-          const colors = ['#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#06b6d4', '#ef4444', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16', '#0ea5e9']
-          return colors[params.dataIndex % colors.length]
-        }
-      },
+  const trend = stats.value.generation_trend || []
+  return createBarChart({
+    xData: trend.map(t => t.month),
+    yAxisName: 'kWh',
+    colorByIndex: true,
+    series: {
+      data: trend.map(t => t.kwh),
       label: { show: true, position: 'top', formatter: '{c}', fontSize: 10 }
-    }]
-  }
+    }
+  })
 })
 
 const incomeTrendOption = computed(() => {
-  const trend = stats.value.monthly_income
-  return {
-    tooltip: { trigger: 'axis' },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: trend.map(t => t.month) },
-    yAxis: { type: 'value', name: '元' },
-    series: [{
-      type: 'line', data: trend.map(t => t.income), smooth: true,
-      itemStyle: { color: '#f59e0b' }, lineStyle: { width: 3 },
-      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(245,158,11,0.3)' }, { offset: 1, color: 'rgba(245,158,11,0.02)' }] } },
+  const trend = stats.value.monthly_income || []
+  return createLineChart({
+    xData: trend.map(t => t.month),
+    yAxisName: '元',
+    lineColor: THEME_COLORS.warning,
+    areaStyle: true,
+    areaColor: THEME_COLORS.warning,
+    series: {
+      data: trend.map(t => t.income),
       label: { show: true, position: 'top', formatter: '¥{c}', fontSize: 10 }
-    }]
-  }
+    }
+  })
 })
 
 const selfUseRateOption = computed(() => {
-  const trend = stats.value.self_use_rate_trend
-  return {
-    tooltip: { trigger: 'axis', formatter: '{b}: {c}%' },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: trend.map(t => t.month) },
-    yAxis: { type: 'value', name: '%', min: 0, max: 100 },
-    series: [{
-      type: 'line', data: trend.map(t => t.rate), smooth: true,
-      itemStyle: { color: '#22c55e' }, lineStyle: { width: 3 },
-      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(34,197,94,0.3)' }, { offset: 1, color: 'rgba(34,197,94,0.02)' }] } },
-      markLine: { data: [{ yAxis: 50, label: { formatter: '目标50%' }, lineStyle: { color: '#ef4444', type: 'dashed' } }] }
-    }]
-  }
+  const trend = stats.value.self_use_rate_trend || []
+  return createLineChart({
+    xData: trend.map(t => t.month),
+    yAxisName: '%',
+    yMin: 0,
+    yMax: 100,
+    lineColor: THEME_COLORS.success,
+    areaStyle: true,
+    areaColor: THEME_COLORS.success,
+    series: {
+      data: trend.map(t => t.rate),
+      markLine: {
+        data: [{ yAxis: 50, label: { formatter: '目标50%' }, lineStyle: { color: THEME_COLORS.danger, type: 'dashed' } }]
+      }
+    },
+    tooltip: { trigger: 'axis', formatter: '{b}: {c}%' }
+  })
 })
 
 const peakValleyOption = computed(() => {
-  const match = stats.value.peak_valley_match
-  return {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { data: ['峰时用电', '谷时用电', '匹配度(%)'], top: 0 },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: match.map(m => m.month) },
-    yAxis: [
-      { type: 'value', name: 'kWh', position: 'left' },
-      { type: 'value', name: '%', min: 0, max: 100, position: 'right' }
+  const match = stats.value.peak_valley_match || []
+  return createDualAxisChart({
+    xData: match.map(m => m.month),
+    leftYAxisName: 'kWh',
+    rightYAxisName: '%',
+    rightYMin: 0,
+    rightYMax: 100,
+    leftSeries: [
+      { name: '峰时用电', type: 'bar', data: match.map(m => m.peak_kwh), itemStyle: { color: THEME_COLORS.warning } },
+      { name: '谷时用电', type: 'bar', data: match.map(m => m.valley_kwh), itemStyle: { color: THEME_COLORS.primary } }
     ],
-    series: [
-      { name: '峰时用电', type: 'bar', data: match.map(m => m.peak_kwh), itemStyle: { color: '#f59e0b' } },
-      { name: '谷时用电', type: 'bar', data: match.map(m => m.valley_kwh), itemStyle: { color: '#3b82f6' } },
-      { name: '匹配度(%)', type: 'line', yAxisIndex: 1, data: match.map(m => m.match_rate), smooth: true, itemStyle: { color: '#22c55e' }, lineStyle: { width: 3 } }
+    rightSeries: [
+      { name: '匹配度(%)', type: 'line', data: match.map(m => m.match_rate), smooth: true, itemStyle: { color: THEME_COLORS.success }, lineStyle: { width: 3 } }
     ]
-  }
+  })
 })
 
 const anomalyTrendOption = computed(() => {
   const trend = stats.value.anomaly_trend || []
-  return {
-    tooltip: { trigger: 'axis' },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: trend.map(t => t.month) },
-    yAxis: { type: 'value', name: '次数', minInterval: 1 },
-    series: [{
-      type: 'bar', data: trend.map(t => t.count),
+  return createBarChart({
+    xData: trend.map(t => t.month),
+    yAxisName: '次数',
+    yAxis: { minInterval: 1 },
+    series: {
+      data: trend.map(t => t.count),
       itemStyle: {
         color: (params) => {
-          if (params.value >= 20) return '#ef4444'
-          if (params.value >= 10) return '#f97316'
-          if (params.value >= 5) return '#f59e0b'
-          return '#22c55e'
+          if (params.value >= 20) return THEME_COLORS.danger
+          if (params.value >= 10) return THEME_COLORS.orange
+          if (params.value >= 5) return THEME_COLORS.warning
+          return THEME_COLORS.success
         }
       },
       label: { show: true, position: 'top', formatter: '{c}', fontSize: 10 }
-    }]
-  }
+    }
+  })
 })
 
 const panelGroupHealthOption = computed(() => {
   const pgHealth = stats.value.panel_group_health || []
   const names = pgHealth.map(p => p.name)
   const scores = pgHealth.map(p => p.avg_health_score ?? 0)
-  return {
-    tooltip: { trigger: 'axis', formatter: (params) => {
-      const p = params[0]
-      return `${p.name}<br/>平均健康评分: ${p.value}`
-    }},
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: names },
-    yAxis: { type: 'value', name: '分', min: 0, max: 100 },
-    series: [{
-      type: 'bar', data: scores,
+  return createBarChart({
+    xData: names,
+    yAxisName: '分',
+    yMin: 0,
+    yMax: 100,
+    series: {
+      data: scores,
       itemStyle: {
         color: (params) => {
-          if (params.value >= 90) return '#22c55e'
-          if (params.value >= 70) return '#f59e0b'
-          if (params.value >= 50) return '#f97316'
-          return '#ef4444'
+          if (params.value >= 90) return THEME_COLORS.success
+          if (params.value >= 70) return THEME_COLORS.warning
+          if (params.value >= 50) return THEME_COLORS.orange
+          return THEME_COLORS.danger
         }
       },
       label: { show: true, position: 'top', formatter: '{c}', fontSize: 12, fontWeight: 600 },
       barWidth: '40%'
-    }]
-  }
+    },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params) => {
+        const p = params[0]
+        return `${p.name}<br/>平均健康评分: ${p.value}`
+      }
+    }
+  })
 })
 
 const storageProfitOption = computed(() => {
   const trend = stats.value.storage_profit_trend || []
-  return {
-    tooltip: { trigger: 'axis', formatter: (params) => {
-      const p = params[0]
-      return `${p.name}<br/>储能增益: ¥${p.value}`
-    }},
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: trend.map(t => t.month) },
-    yAxis: { type: 'value', name: '元' },
-    series: [{
-      type: 'bar', data: trend.map(t => t.profit),
+  return createBarChart({
+    xData: trend.map(t => t.month),
+    yAxisName: '元',
+    series: {
+      data: trend.map(t => t.profit),
       itemStyle: {
-        color: (params) => params.value >= 0 ? '#f59e0b' : '#ef4444'
+        color: (params) => params.value >= 0 ? THEME_COLORS.warning : THEME_COLORS.danger
       },
       label: {
         show: true, position: 'top',
@@ -341,33 +338,35 @@ const storageProfitOption = computed(() => {
       },
       markLine: {
         data: [{ type: 'average', name: '平均值', label: { formatter: '均值 ¥{c}' } }],
-        lineStyle: { color: '#8b5cf6', type: 'dashed' }
+        lineStyle: { color: THEME_COLORS.purple, type: 'dashed' }
       }
-    }]
-  }
+    },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params) => {
+        const p = params[0]
+        return `${p.name}<br/>储能增益: ¥${p.value}`
+      }
+    }
+  })
 })
 
 const peakValleyArbitrageOption = computed(() => {
   const arb = stats.value.peak_valley_arbitrage || []
-  return {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { data: ['峰时节省', '谷电成本', '减少弃光(kWh)', '净收益'], top: 0 },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: arb.map(a => a.month) },
-    yAxis: [
-      { type: 'value', name: '元', position: 'left' },
-      { type: 'value', name: 'kWh', position: 'right' }
-    ],
-    series: [
+  return createDualAxisChart({
+    xData: arb.map(a => a.month),
+    leftYAxisName: '元',
+    rightYAxisName: 'kWh',
+    leftSeries: [
       {
         name: '峰时节省', type: 'bar', stack: 'cost',
         data: arb.map(a => a.peak_saving),
-        itemStyle: { color: '#22c55e' }
+        itemStyle: { color: THEME_COLORS.success }
       },
       {
         name: '谷电成本', type: 'bar', stack: 'cost',
         data: arb.map(a => -a.valley_cost),
-        itemStyle: { color: '#f97316' },
+        itemStyle: { color: THEME_COLORS.orange },
         label: {
           show: true, position: 'inside',
           formatter: (p) => p.value === 0 ? '' : ('-¥' + Math.abs(p.value).toFixed(0)),
@@ -375,49 +374,71 @@ const peakValleyArbitrageOption = computed(() => {
         }
       },
       {
-        name: '减少弃光(kWh)', type: 'bar', yAxisIndex: 1,
-        data: arb.map(a => a.reduced_curtailment_kwh),
-        itemStyle: { color: '#06b6d4', opacity: 0.6 },
-        barWidth: '20%'
-      },
-      {
         name: '净收益', type: 'line',
         data: arb.map(a => a.net_profit),
-        smooth: true, itemStyle: { color: '#8b5cf6' },
+        smooth: true, itemStyle: { color: THEME_COLORS.purple },
         lineStyle: { width: 3 },
         label: { show: true, position: 'top', formatter: '¥{c}', fontSize: 10, fontWeight: 600 }
       }
+    ],
+    rightSeries: [
+      {
+        name: '减少弃光(kWh)', type: 'bar',
+        data: arb.map(a => a.reduced_curtailment_kwh),
+        itemStyle: { color: THEME_COLORS.info, opacity: 0.6 },
+        barWidth: '20%'
+      }
     ]
-  }
+  })
 })
 
 const monthlyCleaningOption = computed(() => {
   const trend = stats.value.monthly_cleaning_trend || []
-  return {
-    tooltip: { trigger: 'axis', formatter: '{b}<br/>清洁次数: {c} 次' },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: trend.map(t => t.month) },
-    yAxis: { type: 'value', name: '次', minInterval: 1 },
-    series: [{
-      type: 'bar', data: trend.map(t => t.count),
+  return createBarChart({
+    xData: trend.map(t => t.month),
+    yAxisName: '次',
+    yAxis: { minInterval: 1 },
+    series: {
+      data: trend.map(t => t.count),
       itemStyle: {
         color: (params) => {
-          const colors = ['#06b6d4', '#3b82f6', '#8b5cf6', '#f59e0b', '#22c55e', '#f97316']
+          const colors = [THEME_COLORS.info, THEME_COLORS.primary, THEME_COLORS.purple, THEME_COLORS.warning, THEME_COLORS.success, THEME_COLORS.orange]
           return colors[params.dataIndex % colors.length]
         },
         borderRadius: [4, 4, 0, 0]
       },
       label: { show: true, position: 'top', formatter: '{c}次', fontSize: 12, fontWeight: 600 },
       barWidth: '40%'
-    }]
-  }
+    },
+    tooltip: { trigger: 'axis', formatter: '{b}<br/>清洁次数: {c} 次' }
+  })
 })
 
 const cleaningEfficiencyCompareOption = computed(() => {
   const data = stats.value.cleaning_efficiency_compare || []
-  return {
+  return createBarChart({
+    xData: data.map(d => d.month),
+    yAxisName: '%',
+    yMin: 0,
+    yMax: 100,
+    legend: { data: ['清洁前效率', '清洁后效率'], top: 0 },
+    series: [
+      {
+        name: '清洁前效率',
+        data: data.map(d => d.before_cleaning),
+        itemStyle: { color: THEME_COLORS.danger },
+        label: { show: true, position: 'top', formatter: '{c}%', fontSize: 10 }
+      },
+      {
+        name: '清洁后效率',
+        data: data.map(d => d.after_cleaning),
+        itemStyle: { color: THEME_COLORS.success },
+        label: { show: true, position: 'top', formatter: '{c}%', fontSize: 10 }
+      }
+    ],
     tooltip: {
-      trigger: 'axis', axisPointer: { type: 'shadow' },
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
       formatter: (params) => {
         let html = params[0].axisValue + '<br/>'
         params.forEach(p => {
@@ -425,30 +446,12 @@ const cleaningEfficiencyCompareOption = computed(() => {
         })
         const imp = data[params[0].dataIndex]
         if (imp && imp.improvement) {
-          html += `<b style="color:#22c55e">提升: +${imp.improvement}%</b>`
+          html += `<b style="color:${THEME_COLORS.success}">提升: +${imp.improvement}%</b>`
         }
         return html
       }
-    },
-    legend: { data: ['清洁前效率', '清洁后效率'], top: 0 },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: data.map(d => d.month) },
-    yAxis: { type: 'value', name: '%', min: 0, max: 100 },
-    series: [
-      {
-        name: '清洁前效率', type: 'bar',
-        data: data.map(d => d.before_cleaning),
-        itemStyle: { color: '#ef4444' },
-        label: { show: true, position: 'top', formatter: '{c}%', fontSize: 10 }
-      },
-      {
-        name: '清洁后效率', type: 'bar',
-        data: data.map(d => d.after_cleaning),
-        itemStyle: { color: '#22c55e' },
-        label: { show: true, position: 'top', formatter: '{c}%', fontSize: 10 }
-      }
-    ]
-  }
+    }
+  })
 })
 
 const panelCleaningRankingOption = computed(() => {
@@ -457,9 +460,26 @@ const panelCleaningRankingOption = computed(() => {
   const names = sorted.map(r => r.name)
   const revenues = sorted.map(r => r.revenue)
   const recovered = sorted.map(r => r.recovered_kwh)
-  return {
+  return createHorizontalBarChart({
+    yData: names,
+    xAxisNames: ['元', 'kWh'],
+    legend: { data: ['收益恢复(元)', '发电恢复(kWh)'], top: 0 },
+    series: [
+      {
+        name: '收益恢复(元)',
+        data: revenues,
+        itemStyle: { color: THEME_COLORS.purple, borderRadius: [0, 4, 4, 0] },
+        label: { show: true, position: 'right', formatter: '+¥{c}', fontSize: 11, fontWeight: 600 }
+      },
+      {
+        name: '发电恢复(kWh)',
+        data: recovered,
+        itemStyle: { color: THEME_COLORS.info, opacity: 0.7, borderRadius: [0, 4, 4, 0] }
+      }
+    ],
     tooltip: {
-      trigger: 'axis', axisPointer: { type: 'shadow' },
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
       formatter: (params) => {
         const idx = params[0].dataIndex
         const item = sorted[idx]
@@ -468,28 +488,8 @@ const panelCleaningRankingOption = computed(() => {
           收益恢复: +¥${item.revenue}<br/>
           发电恢复: +${item.recovered_kwh} kWh`
       }
-    },
-    legend: { data: ['收益恢复(元)', '发电恢复(kWh)'], top: 0 },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: [
-      { type: 'value', name: '元', position: 'bottom' },
-      { type: 'value', name: 'kWh', position: 'top' }
-    ],
-    yAxis: { type: 'category', data: names },
-    series: [
-      {
-        name: '收益恢复(元)', type: 'bar', xAxisIndex: 0,
-        data: revenues,
-        itemStyle: { color: '#8b5cf6', borderRadius: [0, 4, 4, 0] },
-        label: { show: true, position: 'right', formatter: '+¥{c}', fontSize: 11, fontWeight: 600 }
-      },
-      {
-        name: '发电恢复(kWh)', type: 'bar', xAxisIndex: 1,
-        data: recovered,
-        itemStyle: { color: '#06b6d4', opacity: 0.7, borderRadius: [0, 4, 4, 0] }
-      }
-    ]
-  }
+    }
+  })
 })
 
 const loadData = async () => {
