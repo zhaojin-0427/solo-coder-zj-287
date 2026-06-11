@@ -83,7 +83,8 @@
         <el-table-column prop="possible_cause" label="可能原因" min-width="200" show-overflow-tooltip />
         <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.is_handled ? 'info' : 'danger'" size="small">
+            <el-tag v-if="row.anomaly_level === 'normal'" type="success" size="small">正常</el-tag>
+            <el-tag v-else :type="row.is_handled ? 'info' : 'danger'" size="small">
               {{ row.is_handled ? '已处理' : '未处理' }}
             </el-tag>
           </template>
@@ -91,7 +92,7 @@
         <el-table-column label="操作" width="160" align="center">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="showDetail(row)">详情</el-button>
-            <el-button v-if="!row.is_handled" type="success" link size="small" @click="markHandled(row)">标记已处理</el-button>
+            <el-button v-if="!row.is_handled && row.anomaly_level !== 'normal'" type="success" link size="small" @click="markHandled(row)">标记已处理</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -131,7 +132,8 @@
           <el-descriptions-item label="并网运行天数">{{ currentAlert.grid_days }} 天</el-descriptions-item>
           <el-descriptions-item label="峰谷比">{{ currentAlert.peak_valley_ratio }}</el-descriptions-item>
           <el-descriptions-item label="处理状态">
-            <el-tag :type="currentAlert.is_handled ? 'info' : 'danger'" size="small">
+            <el-tag v-if="currentAlert.anomaly_level === 'normal'" type="success" size="small">正常</el-tag>
+            <el-tag v-else :type="currentAlert.is_handled ? 'info' : 'danger'" size="small">
               {{ currentAlert.is_handled ? '已处理' : '未处理' }}
             </el-tag>
           </el-descriptions-item>
@@ -144,7 +146,7 @@
         </el-descriptions>
       </template>
       <template #footer>
-        <el-button v-if="currentAlert && !currentAlert.is_handled" type="success" @click="markHandledFromDialog">标记已处理</el-button>
+        <el-button v-if="currentAlert && !currentAlert.is_handled && currentAlert.anomaly_level !== 'normal'" type="success" @click="markHandledFromDialog">标记已处理</el-button>
         <el-button @click="detailVisible = false">关闭</el-button>
       </template>
     </el-dialog>

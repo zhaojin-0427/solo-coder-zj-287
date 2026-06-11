@@ -470,8 +470,22 @@ class HealthDiagnosisViewSet(viewsets.ModelViewSet):
         date_from = self.request.query_params.get('date_from')
         date_to = self.request.query_params.get('date_to')
         is_handled = self.request.query_params.get('is_handled')
-        if anomaly_level:
-            qs = qs.filter(anomaly_level=anomaly_level)
+        include_normal = self.request.query_params.get('include_normal')
+
+        if self.action == 'list':
+            if anomaly_level:
+                qs = qs.filter(anomaly_level=anomaly_level)
+            else:
+                if include_normal is None or include_normal.lower() not in ('true', '1', 'yes'):
+                    qs = qs.exclude(anomaly_level='normal')
+
+            if is_handled is not None and is_handled != '':
+                handled_bool = is_handled.lower() in ('true', '1', 'yes')
+                if handled_bool:
+                    qs = qs.filter(is_handled=True)
+                else:
+                    qs = qs.filter(is_handled=False).exclude(anomaly_level='normal')
+
         if device_type:
             qs = qs.filter(device_type=device_type)
         if device_id:
@@ -480,13 +494,16 @@ class HealthDiagnosisViewSet(viewsets.ModelViewSet):
             qs = qs.filter(date__gte=date_from)
         if date_to:
             qs = qs.filter(date__lte=date_to)
-        if is_handled is not None and is_handled != '':
-            qs = qs.filter(is_handled=is_handled.lower() in ('true', '1', 'yes'))
         return qs
 
     @action(detail=True, methods=['post'], url_path='mark-handled')
     def mark_handled(self, request, pk=None):
         obj = self.get_object()
+        if obj.anomaly_level == 'normal':
+            return Response(
+                {'error': '正常记录无需标记处理'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         obj.is_handled = True
         obj.handled_at = timezone.now()
         obj.save()
