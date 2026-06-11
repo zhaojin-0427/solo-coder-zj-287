@@ -67,6 +67,45 @@
     </el-row>
 
     <el-row :gutter="16" class="stat-row" style="margin-top:16px">
+      <el-col :xs="12" :sm="6" :md="4">
+        <div class="stat-card" style="cursor:pointer" @click="$router.push('/storage')">
+          <div class="label">当前电池SOC</div>
+          <div class="value" :style="{color: socColor(data.storage_today_soc)}">{{ data.storage_today_soc || '--' }}<span class="unit">%</span></div>
+        </div>
+      </el-col>
+      <el-col :xs="12" :sm="6" :md="4">
+        <div class="stat-card" style="cursor:pointer" @click="$router.push('/storage')">
+          <div class="label">今日充电量</div>
+          <div class="value" style="color:#06b6d4">{{ data.storage_today_charge_kwh || 0 }}<span class="unit">kWh</span></div>
+        </div>
+      </el-col>
+      <el-col :xs="12" :sm="6" :md="4">
+        <div class="stat-card" style="cursor:pointer" @click="$router.push('/storage')">
+          <div class="label">今日放电量</div>
+          <div class="value" style="color:#f97316">{{ data.storage_today_discharge_kwh || 0 }}<span class="unit">kWh</span></div>
+        </div>
+      </el-col>
+      <el-col :xs="12" :sm="6" :md="4">
+        <div class="stat-card" style="cursor:pointer" @click="$router.push('/storage')">
+          <div class="label">今日储能增益</div>
+          <div class="value" :style="{color: (data.storage_today_profit || 0) >= 0 ? '#22c55e' : '#ef4444'}">{{ data.storage_today_profit || 0 }}<span class="unit">元</span></div>
+        </div>
+      </el-col>
+      <el-col :xs="12" :sm="6" :md="4">
+        <div class="stat-card" style="cursor:pointer" @click="$router.push('/storage')">
+          <div class="label">本月储能增益</div>
+          <div class="value" :style="{color: (data.storage_month_profit || 0) >= 0 ? '#f59e0b' : '#ef4444'}">{{ data.storage_month_profit || 0 }}<span class="unit">元</span></div>
+        </div>
+      </el-col>
+      <el-col :xs="12" :sm="6" :md="4">
+        <div class="stat-card">
+          <div class="label">储能总容量</div>
+          <div class="value" style="color:#8b5cf6">{{ data.storage_total_capacity_kwh || 0 }}<span class="unit">kWh</span></div>
+        </div>
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="16" class="stat-row" style="margin-top:16px">
       <el-col :xs="12" :sm="8">
         <div class="stat-card" style="cursor:pointer" @click="$router.push('/alerts')">
           <div class="label">未处理告警</div>
@@ -181,8 +220,19 @@ const data = ref({
   today_efficiency_rate: 0, month_generation_kwh: 0, month_income: 0,
   total_income: 0, total_investment: 0, self_use_rate: 0, payback_pct: 0,
   panel_group_count: 0, inverter_count: 0, recent_7_days: [],
-  unhandled_alert_count: 0, highest_alert_level: 'normal', health_score_trend: []
+  unhandled_alert_count: 0, highest_alert_level: 'normal', health_score_trend: [],
+  storage_battery_count: 0, storage_total_capacity_kwh: 0,
+  storage_today_soc: 0, storage_today_charge_kwh: 0,
+  storage_today_discharge_kwh: 0, storage_today_profit: 0,
+  storage_month_profit: 0
 })
+
+const socColor = (soc) => {
+  if (soc === '--' || soc == null || soc === 0) return '#64748b'
+  if (soc >= 60) return '#22c55e'
+  if (soc >= 30) return '#f59e0b'
+  return '#ef4444'
+}
 
 const todayHealthScore = computed(() => {
   const trend = data.value.health_score_trend

@@ -5,8 +5,10 @@ from solar.views import (
     InverterViewSet, SolarPanelGroupViewSet, DailyGenerationViewSet,
     HouseholdUsageViewSet, ElectricityPriceViewSet, RevenueRecordViewSet,
     HealthDiagnosisViewSet,
+    StorageBatteryViewSet, StorageScheduleViewSet,
     import_generation_data, calculate_revenue, dashboard, statistics,
-    payback_prediction, seed_demo_data, generate_diagnosis, alert_summary
+    payback_prediction, seed_demo_data, generate_diagnosis, alert_summary,
+    calculate_storage, storage_summary
 )
 
 router = DefaultRouter()
@@ -17,6 +19,8 @@ router.register(r'household-usage', HouseholdUsageViewSet)
 router.register(r'electricity-prices', ElectricityPriceViewSet)
 router.register(r'revenue-records', RevenueRecordViewSet)
 router.register(r'health-diagnosis', HealthDiagnosisViewSet)
+router.register(r'storage-batteries', StorageBatteryViewSet)
+router.register(r'storage-schedules', StorageScheduleViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -29,4 +33,6 @@ urlpatterns = [
     path('api/seed-demo/', seed_demo_data),
     path('api/generate-diagnosis/', generate_diagnosis),
     path('api/alert-summary/', alert_summary),
+    path('api/calculate-storage/', calculate_storage),
+    path('api/storage-summary/', storage_summary),
 ]

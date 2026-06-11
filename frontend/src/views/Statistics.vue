@@ -40,6 +40,21 @@
       </el-col>
     </el-row>
 
+    <el-row :gutter="16" class="stat-row" style="margin-top:0">
+      <el-col :xs="12" :sm="6">
+        <div class="stat-card">
+          <div class="label">储能累计增益</div>
+          <div class="value" style="color:#f59e0b">{{ (stats.total_storage_profit || 0).toLocaleString() }}<span class="unit">元</span></div>
+        </div>
+      </el-col>
+      <el-col :xs="12" :sm="6">
+        <div class="stat-card">
+          <div class="label">累计减少弃光</div>
+          <div class="value" style="color:#22c55e">{{ (stats.total_reduced_curtailment_kwh || 0).toFixed(1) }}<span class="unit">kWh</span></div>
+        </div>
+      </el-col>
+    </el-row>
+
     <el-row :gutter="16" style="margin-top:16px">
       <el-col :span="12">
         <div class="page-card">
@@ -96,6 +111,25 @@
         </div>
       </el-col>
     </el-row>
+
+    <el-row :gutter="16" style="margin-top:16px">
+      <el-col :span="12">
+        <div class="page-card">
+          <div class="page-card-title">
+            <el-icon><Lightning /></el-icon> 月度储能增益趋势
+          </div>
+          <v-chart :option="storageProfitOption" class="chart-container" autoresize />
+        </div>
+      </el-col>
+      <el-col :span="12">
+        <div class="page-card">
+          <div class="page-card-title">
+            <el-icon><Coin /></el-icon> 峰谷套利贡献分析
+          </div>
+          <v-chart :option="peakValleyArbitrageOption" class="chart-container" autoresize />
+        </div>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -106,7 +140,7 @@ import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent } from 'echarts/components'
-import { DataLine, TrendCharts, PieChart, Histogram, Warning, Odometer } from '@element-plus/icons-vue'
+import { DataLine, TrendCharts, PieChart, Histogram, Warning, Odometer, Lightning, Coin } from '@element-plus/icons-vue'
 import api from '../api'
 
 use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent])
@@ -115,7 +149,9 @@ const months = ref(12)
 const stats = ref({
   generation_trend: [], self_use_rate_trend: [], peak_valley_match: [],
   payback_pct: 0, total_investment: 0, total_revenue: 0, irr: 0, monthly_income: [],
-  anomaly_trend: [], panel_group_health: []
+  anomaly_trend: [], panel_group_health: [],
+  storage_profit_trend: [], peak_valley_arbitrage: [],
+  total_storage_profit: 0, total_reduced_curtailment_kwh: 0
 })
 
 const generationTrendOption = computed(() => {
@@ -235,6 +271,78 @@ const panelGroupHealthOption = computed(() => {
       label: { show: true, position: 'top', formatter: '{c}', fontSize: 12, fontWeight: 600 },
       barWidth: '40%'
     }]
+  }
+})
+
+const storageProfitOption = computed(() => {
+  const trend = stats.value.storage_profit_trend || []
+  return {
+    tooltip: { trigger: 'axis', formatter: (params) => {
+      const p = params[0]
+      return `${p.name}<br/>储能增益: ¥${p.value}`
+    }},
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: trend.map(t => t.month) },
+    yAxis: { type: 'value', name: '元' },
+    series: [{
+      type: 'bar', data: trend.map(t => t.profit),
+      itemStyle: {
+        color: (params) => params.value >= 0 ? '#f59e0b' : '#ef4444'
+      },
+      label: {
+        show: true, position: 'top',
+        formatter: (p) => (p.value >= 0 ? '+' : '') + p.value,
+        fontSize: 11, fontWeight: 600
+      },
+      markLine: {
+        data: [{ type: 'average', name: '平均值', label: { formatter: '均值 ¥{c}' } }],
+        lineStyle: { color: '#8b5cf6', type: 'dashed' }
+      }
+    }]
+  }
+})
+
+const peakValleyArbitrageOption = computed(() => {
+  const arb = stats.value.peak_valley_arbitrage || []
+  return {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { data: ['峰时节省', '谷电成本', '减少弃光(kWh)', '净收益'], top: 0 },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: arb.map(a => a.month) },
+    yAxis: [
+      { type: 'value', name: '元', position: 'left' },
+      { type: 'value', name: 'kWh', position: 'right' }
+    ],
+    series: [
+      {
+        name: '峰时节省', type: 'bar', stack: 'cost',
+        data: arb.map(a => a.peak_saving),
+        itemStyle: { color: '#22c55e' }
+      },
+      {
+        name: '谷电成本', type: 'bar', stack: 'cost',
+        data: arb.map(a => -a.valley_cost),
+        itemStyle: { color: '#f97316' },
+        label: {
+          show: true, position: 'inside',
+          formatter: (p) => p.value === 0 ? '' : ('-¥' + Math.abs(p.value).toFixed(0)),
+          fontSize: 10, color: '#fff'
+        }
+      },
+      {
+        name: '减少弃光(kWh)', type: 'bar', yAxisIndex: 1,
+        data: arb.map(a => a.reduced_curtailment_kwh),
+        itemStyle: { color: '#06b6d4', opacity: 0.6 },
+        barWidth: '20%'
+      },
+      {
+        name: '净收益', type: 'line',
+        data: arb.map(a => a.net_profit),
+        smooth: true, itemStyle: { color: '#8b5cf6' },
+        lineStyle: { width: 3 },
+        label: { show: true, position: 'top', formatter: '¥{c}', fontSize: 10, fontWeight: 600 }
+      }
+    ]
   }
 })
 

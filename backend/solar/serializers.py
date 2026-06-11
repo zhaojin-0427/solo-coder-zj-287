@@ -1,5 +1,9 @@
 from rest_framework import serializers
-from .models import Inverter, SolarPanelGroup, DailyGeneration, HouseholdUsage, ElectricityPrice, RevenueRecord, HealthDiagnosis
+from .models import (
+    Inverter, SolarPanelGroup, DailyGeneration, HouseholdUsage,
+    ElectricityPrice, RevenueRecord, HealthDiagnosis,
+    StorageBattery, StorageSchedule
+)
 
 
 class InverterSerializer(serializers.ModelSerializer):
@@ -76,3 +80,33 @@ class HealthDiagnosisSerializer(serializers.ModelSerializer):
 
     def get_anomaly_type_display(self, obj):
         return obj.get_anomaly_type_display()
+
+
+class StorageBatterySerializer(serializers.ModelSerializer):
+    panel_group_names = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    total_capacity_display = serializers.SerializerMethodField()
+    days_enabled = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StorageBattery
+        fields = '__all__'
+
+    def get_panel_group_names(self, obj):
+        return [pg.name for pg in obj.panel_groups.all()]
+
+    def get_total_capacity_display(self, obj):
+        return f'{obj.capacity_kwh} kWh'
+
+    def get_days_enabled(self, obj):
+        from datetime import date
+        return (date.today() - obj.enable_date).days if obj.enable_date else 0
+
+
+class StorageScheduleSerializer(serializers.ModelSerializer):
+    battery_name = serializers.CharField(source='battery.name', read_only=True)
+    battery_capacity = serializers.FloatField(source='battery.capacity_kwh', read_only=True)
+
+    class Meta:
+        model = StorageSchedule
+        fields = '__all__'

@@ -62,4 +62,21 @@ export default {
 
   alertSummary: () => api.get('/alert-summary/'),
   generateDiagnosis: (dateFrom, dateTo) => api.post('/generate-diagnosis/', { date_from: dateFrom, date_to: dateTo }),
+
+  storageSummary: () => api.get('/storage-summary/'),
+  calculateStorage: (data) => api.post('/calculate-storage/', data),
+
+  storageBatteries: {
+    list: () => api.get('/storage-batteries/'),
+    create: (data) => api.post('/storage-batteries/', data),
+    update: (id, data) => api.put(`/storage-batteries/${id}/`, data),
+    delete: (id) => api.delete(`/storage-batteries/${id}/`),
+    get: (id) => api.get(`/storage-batteries/${id}/`),
+    recalculate: (id, dateFrom, dateTo) => api.post(`/storage-batteries/${id}/recalculate/`, { date_from: dateFrom, date_to: dateTo }),
+  },
+
+  storageSchedules: {
+    list: (params) => api.get('/storage-schedules/', { params }),
+    get: (id) => api.get(`/storage-schedules/${id}/`),
+  },
 }
