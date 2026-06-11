@@ -54,4 +54,12 @@ export default {
   revenueRecords: {
     list: (params) => api.get('/revenue-records/', { params }),
   },
+
+  healthDiagnosis: {
+    list: (params) => api.get('/health-diagnosis/', { params }),
+    markHandled: (id) => api.post(`/health-diagnosis/${id}/mark-handled/`),
+  },
+
+  alertSummary: () => api.get('/alert-summary/'),
+  generateDiagnosis: (dateFrom, dateTo) => api.post('/generate-diagnosis/', { date_from: dateFrom, date_to: dateTo }),
 }

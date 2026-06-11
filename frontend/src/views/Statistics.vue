@@ -77,6 +77,25 @@
         </div>
       </el-col>
     </el-row>
+
+    <el-row :gutter="16" style="margin-top:16px">
+      <el-col :span="12">
+        <div class="page-card">
+          <div class="page-card-title">
+            <el-icon><Warning /></el-icon> 月度异常次数趋势
+          </div>
+          <v-chart :option="anomalyTrendOption" class="chart-container" autoresize />
+        </div>
+      </el-col>
+      <el-col :span="12">
+        <div class="page-card">
+          <div class="page-card-title">
+            <el-icon><Odometer /></el-icon> 各板组健康评分对比
+          </div>
+          <v-chart :option="panelGroupHealthOption" class="chart-container" autoresize />
+        </div>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -87,7 +106,7 @@ import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent } from 'echarts/components'
-import { DataLine, TrendCharts, PieChart, Histogram } from '@element-plus/icons-vue'
+import { DataLine, TrendCharts, PieChart, Histogram, Warning, Odometer } from '@element-plus/icons-vue'
 import api from '../api'
 
 use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent])
@@ -95,7 +114,8 @@ use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, Legen
 const months = ref(12)
 const stats = ref({
   generation_trend: [], self_use_rate_trend: [], peak_valley_match: [],
-  payback_pct: 0, total_investment: 0, total_revenue: 0, irr: 0, monthly_income: []
+  payback_pct: 0, total_investment: 0, total_revenue: 0, irr: 0, monthly_income: [],
+  anomaly_trend: [], panel_group_health: []
 })
 
 const generationTrendOption = computed(() => {
@@ -165,6 +185,56 @@ const peakValleyOption = computed(() => {
       { name: '谷时用电', type: 'bar', data: match.map(m => m.valley_kwh), itemStyle: { color: '#3b82f6' } },
       { name: '匹配度(%)', type: 'line', yAxisIndex: 1, data: match.map(m => m.match_rate), smooth: true, itemStyle: { color: '#22c55e' }, lineStyle: { width: 3 } }
     ]
+  }
+})
+
+const anomalyTrendOption = computed(() => {
+  const trend = stats.value.anomaly_trend || []
+  return {
+    tooltip: { trigger: 'axis' },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: trend.map(t => t.month) },
+    yAxis: { type: 'value', name: '次数', minInterval: 1 },
+    series: [{
+      type: 'bar', data: trend.map(t => t.count),
+      itemStyle: {
+        color: (params) => {
+          if (params.value >= 20) return '#ef4444'
+          if (params.value >= 10) return '#f97316'
+          if (params.value >= 5) return '#f59e0b'
+          return '#22c55e'
+        }
+      },
+      label: { show: true, position: 'top', formatter: '{c}', fontSize: 10 }
+    }]
+  }
+})
+
+const panelGroupHealthOption = computed(() => {
+  const pgHealth = stats.value.panel_group_health || []
+  const names = pgHealth.map(p => p.name)
+  const scores = pgHealth.map(p => p.avg_health_score ?? 0)
+  return {
+    tooltip: { trigger: 'axis', formatter: (params) => {
+      const p = params[0]
+      return `${p.name}<br/>平均健康评分: ${p.value}`
+    }},
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: names },
+    yAxis: { type: 'value', name: '分', min: 0, max: 100 },
+    series: [{
+      type: 'bar', data: scores,
+      itemStyle: {
+        color: (params) => {
+          if (params.value >= 90) return '#22c55e'
+          if (params.value >= 70) return '#f59e0b'
+          if (params.value >= 50) return '#f97316'
+          return '#ef4444'
+        }
+      },
+      label: { show: true, position: 'top', formatter: '{c}', fontSize: 12, fontWeight: 600 },
+      barWidth: '40%'
+    }]
   }
 })
 

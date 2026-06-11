@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 const routes = [
   { path: '/', redirect: '/dashboard' },
   { path: '/dashboard', name: 'Dashboard', component: () => import('../views/Dashboard.vue'), meta: { title: '发电监控看板' } },
+  { path: '/alerts', name: 'Alerts', component: () => import('../views/Alerts.vue'), meta: { title: '告警中心' } },
   { path: '/inverters', name: 'Inverters', component: () => import('../views/Inverters.vue'), meta: { title: '逆变器管理' } },
   { path: '/generation', name: 'Generation', component: () => import('../views/Generation.vue'), meta: { title: '发电数据' } },
   { path: '/revenue', name: 'Revenue', component: () => import('../views/Revenue.vue'), meta: { title: '收益明细' } },

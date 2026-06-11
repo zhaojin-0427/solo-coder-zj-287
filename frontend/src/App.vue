@@ -18,6 +18,10 @@
             <el-icon><Monitor /></el-icon>
             <span>发电监控看板</span>
           </el-menu-item>
+          <el-menu-item index="/alerts">
+            <el-icon><Bell /></el-icon>
+            <span>告警中心</span>
+          </el-menu-item>
           <el-menu-item index="/inverters">
             <el-icon><Cpu /></el-icon>
             <span>逆变器管理</span>
@@ -62,7 +66,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { Sunny, Monitor, Cpu, DataLine, Wallet, Timer, TrendCharts } from '@element-plus/icons-vue'
+import { Sunny, Monitor, Cpu, DataLine, Wallet, Timer, TrendCharts, Bell } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import api from './api'
 

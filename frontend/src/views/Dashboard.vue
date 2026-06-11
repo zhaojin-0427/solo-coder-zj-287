@@ -66,6 +66,27 @@
       </el-col>
     </el-row>
 
+    <el-row :gutter="16" class="stat-row" style="margin-top:16px">
+      <el-col :xs="12" :sm="8">
+        <div class="stat-card" style="cursor:pointer" @click="$router.push('/alerts')">
+          <div class="label">未处理告警</div>
+          <div class="value" style="color:#ef4444">{{ data.unhandled_alert_count || 0 }}<span class="unit">条</span></div>
+        </div>
+      </el-col>
+      <el-col :xs="12" :sm="8">
+        <div class="stat-card" style="cursor:pointer" @click="$router.push('/alerts')">
+          <div class="label">最高告警等级</div>
+          <div class="value" :style="{color: levelColorMap[data.highest_alert_level] || '#22c55e'}">{{ levelLabelMap[data.highest_alert_level] || '正常' }}</div>
+        </div>
+      </el-col>
+      <el-col :xs="12" :sm="8">
+        <div class="stat-card">
+          <div class="label">今日平均健康评分</div>
+          <div class="value" :style="{color: todayHealthColor}">{{ todayHealthScore }}<span class="unit">分</span></div>
+        </div>
+      </el-col>
+    </el-row>
+
     <el-row :gutter="16" style="margin-top:16px">
       <el-col :span="16">
         <div class="page-card">
@@ -86,6 +107,14 @@
     </el-row>
 
     <el-row :gutter="16" style="margin-top:16px">
+      <el-col :span="8">
+        <div class="page-card">
+          <div class="page-card-title">
+            <el-icon><DataLine /></el-icon> 近7日健康评分趋势
+          </div>
+          <v-chart :option="healthTrendOption" class="chart-container" autoresize />
+        </div>
+      </el-col>
       <el-col :span="8">
         <div class="page-card">
           <div class="page-card-title">
@@ -111,10 +140,10 @@
           </div>
         </div>
       </el-col>
-      <el-col :span="16">
+      <el-col :span="8">
         <div class="page-card">
           <div class="page-card-title">
-            <el-icon><DataLine /></el-icon> 回本进度
+            <el-icon><Timer /></el-icon> 回本进度
           </div>
           <el-progress
             :percentage="data.payback_pct"
@@ -138,17 +167,38 @@ import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, LineChart, PieChart as PieChartType } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
-import { TrendCharts, Cpu, DataLine, PieChart } from '@element-plus/icons-vue'
+import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent } from 'echarts/components'
+import { TrendCharts, Cpu, DataLine, PieChart, Timer } from '@element-plus/icons-vue'
 import api from '../api'
 
-use([CanvasRenderer, BarChart, LineChart, PieChartType, GridComponent, TooltipComponent, LegendComponent])
+use([CanvasRenderer, BarChart, LineChart, PieChartType, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent])
+
+const levelLabelMap = { normal: '正常', low: '低', medium: '中', high: '高', critical: '严重' }
+const levelColorMap = { normal: '#22c55e', low: '#3b82f6', medium: '#f59e0b', high: '#f97316', critical: '#ef4444' }
 
 const data = ref({
   total_capacity_kw: 0, today_generation_kwh: 0, today_theoretical_kwh: 0,
   today_efficiency_rate: 0, month_generation_kwh: 0, month_income: 0,
   total_income: 0, total_investment: 0, self_use_rate: 0, payback_pct: 0,
-  panel_group_count: 0, inverter_count: 0, recent_7_days: []
+  panel_group_count: 0, inverter_count: 0, recent_7_days: [],
+  unhandled_alert_count: 0, highest_alert_level: 'normal', health_score_trend: []
+})
+
+const todayHealthScore = computed(() => {
+  const trend = data.value.health_score_trend
+  if (trend && trend.length > 0) {
+    const todayEntry = trend[trend.length - 1]
+    return todayEntry.avg_health_score ?? '--'
+  }
+  return '--'
+})
+
+const todayHealthColor = computed(() => {
+  const score = todayHealthScore.value
+  if (score === '--') return '#64748b'
+  if (score >= 90) return '#22c55e'
+  if (score >= 70) return '#f59e0b'
+  return '#ef4444'
 })
 
 const paybackColor = computed(() => {
@@ -190,6 +240,25 @@ const selfUsePieOption = computed(() => ({
     emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.2)' } }
   }]
 }))
+
+const healthTrendOption = computed(() => {
+  const trend = data.value.health_score_trend || []
+  return {
+    tooltip: { trigger: 'axis', formatter: (params) => {
+      const p = params[0]
+      return `${p.name}<br/>健康评分: ${p.value ?? '无数据'}`
+    }},
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: trend.map(d => d.date.slice(5)) },
+    yAxis: { type: 'value', name: '分', min: 0, max: 100 },
+    series: [{
+      type: 'line', data: trend.map(d => d.avg_health_score), smooth: true,
+      itemStyle: { color: '#8b5cf6' }, lineStyle: { width: 3 },
+      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(139,92,246,0.3)' }, { offset: 1, color: 'rgba(139,92,246,0.02)' }] } },
+      markLine: { data: [{ yAxis: 70, label: { formatter: '警戒线70' }, lineStyle: { color: '#ef4444', type: 'dashed' } }] }
+    }]
+  }
+})
 
 onMounted(async () => {
   try {

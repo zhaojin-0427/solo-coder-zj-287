@@ -4,8 +4,9 @@ from rest_framework.routers import DefaultRouter
 from solar.views import (
     InverterViewSet, SolarPanelGroupViewSet, DailyGenerationViewSet,
     HouseholdUsageViewSet, ElectricityPriceViewSet, RevenueRecordViewSet,
+    HealthDiagnosisViewSet,
     import_generation_data, calculate_revenue, dashboard, statistics,
-    payback_prediction, seed_demo_data
+    payback_prediction, seed_demo_data, generate_diagnosis, alert_summary
 )
 
 router = DefaultRouter()
@@ -15,6 +16,7 @@ router.register(r'daily-generation', DailyGenerationViewSet)
 router.register(r'household-usage', HouseholdUsageViewSet)
 router.register(r'electricity-prices', ElectricityPriceViewSet)
 router.register(r'revenue-records', RevenueRecordViewSet)
+router.register(r'health-diagnosis', HealthDiagnosisViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -25,4 +27,6 @@ urlpatterns = [
     path('api/statistics/', statistics),
     path('api/payback-prediction/', payback_prediction),
     path('api/seed-demo/', seed_demo_data),
+    path('api/generate-diagnosis/', generate_diagnosis),
+    path('api/alert-summary/', alert_summary),
 ]

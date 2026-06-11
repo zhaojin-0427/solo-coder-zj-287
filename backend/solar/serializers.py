@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Inverter, SolarPanelGroup, DailyGeneration, HouseholdUsage, ElectricityPrice, RevenueRecord
+from .models import Inverter, SolarPanelGroup, DailyGeneration, HouseholdUsage, ElectricityPrice, RevenueRecord, HealthDiagnosis
 
 
 class InverterSerializer(serializers.ModelSerializer):
@@ -57,3 +57,22 @@ class RevenueRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = RevenueRecord
         fields = '__all__'
+
+
+class HealthDiagnosisSerializer(serializers.ModelSerializer):
+    device_display_name = serializers.SerializerMethodField()
+    anomaly_level_display = serializers.SerializerMethodField()
+    anomaly_type_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HealthDiagnosis
+        fields = '__all__'
+
+    def get_device_display_name(self, obj):
+        return obj.device_name or f'{obj.get_device_type_display()} #{obj.device_id}'
+
+    def get_anomaly_level_display(self, obj):
+        return obj.get_anomaly_level_display()
+
+    def get_anomaly_type_display(self, obj):
+        return obj.get_anomaly_type_display()
