@@ -204,3 +204,61 @@ class StorageSchedule(models.Model):
 
     def __str__(self):
         return f'{self.battery.name} - {self.date}: 收益+{self.total_profit_diff}'
+
+
+class CleaningPlan(models.Model):
+    CLEANING_METHOD_CHOICES = [
+        ('manual', '人工清洁'),
+        ('water', '水洗清洁'),
+        ('dry', '干洗清洁'),
+        ('robot', '机器人清洁'),
+        ('rain', '雨水自洁'),
+    ]
+    EFFECTIVENESS_LEVEL_CHOICES = [
+        ('excellent', '优秀'),
+        ('good', '良好'),
+        ('fair', '一般'),
+        ('poor', '较差'),
+        ('none', '未评估'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', '待执行'),
+        ('completed', '已完成'),
+        ('cancelled', '已取消'),
+    ]
+
+    panel_group = models.ForeignKey(SolarPanelGroup, on_delete=models.CASCADE, related_name='cleaning_plans')
+    plan_name = models.CharField(max_length=200, default='常规清洁')
+    cleaning_method = models.CharField(max_length=30, choices=CLEANING_METHOD_CHOICES, default='manual')
+    estimated_cost = models.FloatField(default=0, help_text='预计费用 元')
+    actual_cost = models.FloatField(default=0, help_text='实际费用 元')
+    operator = models.CharField(max_length=100, default='', blank=True, help_text='执行人员')
+    plan_date = models.DateField(help_text='计划日期')
+    actual_date = models.DateField(null=True, blank=True, help_text='实际完成日期')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    notes = models.TextField(default='', blank=True, help_text='备注')
+
+    pre_avg_efficiency = models.FloatField(default=0, help_text='清洁前7日平均发电效率 %')
+    post_avg_efficiency = models.FloatField(default=0, help_text='清洁后7日平均发电效率 %')
+    pre_avg_deviation = models.FloatField(default=0, help_text='清洁前7日平均偏差率 %')
+    post_avg_deviation = models.FloatField(default=0, help_text='清洁后7日平均偏差率 %')
+    consecutive_low_days = models.IntegerField(default=0, help_text='清洁前连续低发电天数')
+    weather_sunshine_coeff = models.FloatField(default=1.0, help_text='天气日照系数')
+    health_score_before = models.FloatField(default=0, help_text='清洁前健康评分')
+    health_score_after = models.FloatField(default=0, help_text='清洁后健康评分')
+
+    recovered_generation_kwh = models.FloatField(default=0, help_text='发电恢复量 kWh')
+    extra_revenue = models.FloatField(default=0, help_text='额外收益 元')
+    cost_recovery_days = models.IntegerField(default=0, help_text='费用回收天数')
+    effectiveness_level = models.CharField(max_length=20, choices=EFFECTIVENESS_LEVEL_CHOICES, default='none')
+    evaluation_detail = models.JSONField(default=dict, help_text='评估详细数据')
+    evaluated_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-plan_date', '-id']
+
+    def __str__(self):
+        return f'{self.panel_group.name} - {self.plan_date} - {self.get_status_display()}'

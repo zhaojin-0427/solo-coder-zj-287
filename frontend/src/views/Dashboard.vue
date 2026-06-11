@@ -126,6 +126,21 @@
       </el-col>
     </el-row>
 
+    <el-row :gutter="16" class="stat-row" style="margin-top:16px">
+      <el-col :xs="12" :sm="6">
+        <div class="stat-card" style="cursor:pointer" @click="$router.push('/cleaning')">
+          <div class="label">近期待清洁板组</div>
+          <div class="value" style="color:#f97316">{{ data.upcoming_cleaning_count || 0 }}<span class="unit">组</span></div>
+        </div>
+      </el-col>
+      <el-col :xs="12" :sm="6">
+        <div class="stat-card" style="cursor:pointer" @click="$router.push('/cleaning')">
+          <div class="label">最近清洁收益恢复</div>
+          <div class="value" style="color:#22c55e">+{{ data.latest_cleaning_revenue || 0 }}<span class="unit">元</span></div>
+        </div>
+      </el-col>
+    </el-row>
+
     <el-row :gutter="16" style="margin-top:16px">
       <el-col :span="16">
         <div class="page-card">
@@ -224,7 +239,8 @@ const data = ref({
   storage_battery_count: 0, storage_total_capacity_kwh: 0,
   storage_today_soc: 0, storage_today_charge_kwh: 0,
   storage_today_discharge_kwh: 0, storage_today_profit: 0,
-  storage_month_profit: 0
+  storage_month_profit: 0,
+  upcoming_cleaning_count: 0, latest_cleaning_revenue: 0
 })
 
 const socColor = (soc) => {

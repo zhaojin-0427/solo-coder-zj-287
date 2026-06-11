@@ -18,6 +18,10 @@
             <el-icon><Monitor /></el-icon>
             <span>发电监控看板</span>
           </el-menu-item>
+          <el-menu-item index="/cleaning">
+            <el-icon><Brush /></el-icon>
+            <span>清洁维护</span>
+          </el-menu-item>
           <el-menu-item index="/storage">
             <el-icon><Lightning /></el-icon>
             <span>储能管理</span>
@@ -70,7 +74,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { Sunny, Monitor, Cpu, DataLine, Wallet, Timer, TrendCharts, Bell, Lightning } from '@element-plus/icons-vue'
+import { Sunny, Monitor, Cpu, DataLine, Wallet, Timer, TrendCharts, Bell, Lightning, Brush } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import api from './api'
 

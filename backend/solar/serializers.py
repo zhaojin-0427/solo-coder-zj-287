@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     Inverter, SolarPanelGroup, DailyGeneration, HouseholdUsage,
     ElectricityPrice, RevenueRecord, HealthDiagnosis,
-    StorageBattery, StorageSchedule
+    StorageBattery, StorageSchedule, CleaningPlan
 )
 
 
@@ -109,4 +109,16 @@ class StorageScheduleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StorageSchedule
+        fields = '__all__'
+
+
+class CleaningPlanSerializer(serializers.ModelSerializer):
+    panel_group_name = serializers.CharField(source='panel_group.name', read_only=True)
+    panel_group_capacity = serializers.FloatField(source='panel_group.capacity_kw', read_only=True)
+    cleaning_method_display = serializers.CharField(source='get_cleaning_method_display', read_only=True)
+    effectiveness_level_display = serializers.CharField(source='get_effectiveness_level_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = CleaningPlan
         fields = '__all__'

@@ -79,4 +79,15 @@ export default {
     list: (params) => api.get('/storage-schedules/', { params }),
     get: (id) => api.get(`/storage-schedules/${id}/`),
   },
+
+  cleaningPlans: {
+    list: (params) => api.get('/cleaning-plans/', { params }),
+    create: (data) => api.post('/cleaning-plans/', data),
+    update: (id, data) => api.put(`/cleaning-plans/${id}/`, data),
+    delete: (id) => api.delete(`/cleaning-plans/${id}/`),
+    get: (id) => api.get(`/cleaning-plans/${id}/`),
+    markCompleted: (id, data) => api.post(`/cleaning-plans/${id}/mark-completed/`, data),
+    reEvaluate: (id) => api.post(`/cleaning-plans/${id}/re-evaluate/`),
+    summary: () => api.get('/cleaning-plans/summary/'),
+  },
 }

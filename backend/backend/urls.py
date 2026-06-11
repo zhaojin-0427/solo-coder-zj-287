@@ -6,6 +6,7 @@ from solar.views import (
     HouseholdUsageViewSet, ElectricityPriceViewSet, RevenueRecordViewSet,
     HealthDiagnosisViewSet,
     StorageBatteryViewSet, StorageScheduleViewSet,
+    CleaningPlanViewSet,
     import_generation_data, calculate_revenue, dashboard, statistics,
     payback_prediction, seed_demo_data, generate_diagnosis, alert_summary,
     calculate_storage, storage_summary
@@ -21,6 +22,7 @@ router.register(r'revenue-records', RevenueRecordViewSet)
 router.register(r'health-diagnosis', HealthDiagnosisViewSet)
 router.register(r'storage-batteries', StorageBatteryViewSet)
 router.register(r'storage-schedules', StorageScheduleViewSet)
+router.register(r'cleaning-plans', CleaningPlanViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),

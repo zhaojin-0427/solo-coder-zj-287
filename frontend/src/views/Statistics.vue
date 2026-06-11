@@ -53,6 +53,18 @@
           <div class="value" style="color:#22c55e">{{ (stats.total_reduced_curtailment_kwh || 0).toFixed(1) }}<span class="unit">kWh</span></div>
         </div>
       </el-col>
+      <el-col :xs="12" :sm="6">
+        <div class="stat-card" style="cursor:pointer" @click="$router.push('/cleaning')">
+          <div class="label">累计清洁次数</div>
+          <div class="value" style="color:#06b6d4">{{ stats.total_cleaning_count || 0 }}<span class="unit">次</span></div>
+        </div>
+      </el-col>
+      <el-col :xs="12" :sm="6">
+        <div class="stat-card" style="cursor:pointer" @click="$router.push('/cleaning')">
+          <div class="label">清洁累计收益恢复</div>
+          <div class="value" style="color:#8b5cf6">+{{ (stats.total_cleaning_revenue || 0).toLocaleString() }}<span class="unit">元</span></div>
+        </div>
+      </el-col>
     </el-row>
 
     <el-row :gutter="16" style="margin-top:16px">
@@ -130,6 +142,37 @@
         </div>
       </el-col>
     </el-row>
+
+    <el-row :gutter="16" style="margin-top:16px">
+      <el-col :span="12">
+        <div class="page-card">
+          <div class="page-card-title">
+            <el-icon><Brush /></el-icon> 月度清洁次数趋势
+          </div>
+          <v-chart :option="monthlyCleaningOption" class="chart-container" autoresize />
+        </div>
+      </el-col>
+      <el-col :span="12">
+        <div class="page-card">
+          <div class="page-card-title">
+            <el-icon><DataLine /></el-icon> 清洁前后发电效率对比
+          </div>
+          <v-chart :option="cleaningEfficiencyCompareOption" class="chart-container" autoresize />
+        </div>
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="16" style="margin-top:16px">
+      <el-col :span="24">
+        <div class="page-card">
+          <div class="page-card-title">
+            <el-icon><TrendCharts /></el-icon> 各板组清洁收益贡献排行
+            <span style="margin-left:auto;font-size:13px;font-weight:400;color:#94a3b8">累计恢复发电: +{{ (stats.total_cleaning_recovered_kwh || 0).toLocaleString() }} kWh</span>
+          </div>
+          <v-chart :option="panelCleaningRankingOption" style="width:100%;height:320px" autoresize />
+        </div>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -140,7 +183,7 @@ import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent } from 'echarts/components'
-import { DataLine, TrendCharts, PieChart, Histogram, Warning, Odometer, Lightning, Coin } from '@element-plus/icons-vue'
+import { DataLine, TrendCharts, PieChart, Histogram, Warning, Odometer, Lightning, Coin, Brush } from '@element-plus/icons-vue'
 import api from '../api'
 
 use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent])
@@ -151,7 +194,9 @@ const stats = ref({
   payback_pct: 0, total_investment: 0, total_revenue: 0, irr: 0, monthly_income: [],
   anomaly_trend: [], panel_group_health: [],
   storage_profit_trend: [], peak_valley_arbitrage: [],
-  total_storage_profit: 0, total_reduced_curtailment_kwh: 0
+  total_storage_profit: 0, total_reduced_curtailment_kwh: 0,
+  monthly_cleaning_trend: [], cleaning_efficiency_compare: [], panel_cleaning_ranking: [],
+  total_cleaning_count: 0, total_cleaning_revenue: 0, total_cleaning_recovered_kwh: 0
 })
 
 const generationTrendOption = computed(() => {
@@ -341,6 +386,107 @@ const peakValleyArbitrageOption = computed(() => {
         smooth: true, itemStyle: { color: '#8b5cf6' },
         lineStyle: { width: 3 },
         label: { show: true, position: 'top', formatter: '¥{c}', fontSize: 10, fontWeight: 600 }
+      }
+    ]
+  }
+})
+
+const monthlyCleaningOption = computed(() => {
+  const trend = stats.value.monthly_cleaning_trend || []
+  return {
+    tooltip: { trigger: 'axis', formatter: '{b}<br/>清洁次数: {c} 次' },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: trend.map(t => t.month) },
+    yAxis: { type: 'value', name: '次', minInterval: 1 },
+    series: [{
+      type: 'bar', data: trend.map(t => t.count),
+      itemStyle: {
+        color: (params) => {
+          const colors = ['#06b6d4', '#3b82f6', '#8b5cf6', '#f59e0b', '#22c55e', '#f97316']
+          return colors[params.dataIndex % colors.length]
+        },
+        borderRadius: [4, 4, 0, 0]
+      },
+      label: { show: true, position: 'top', formatter: '{c}次', fontSize: 12, fontWeight: 600 },
+      barWidth: '40%'
+    }]
+  }
+})
+
+const cleaningEfficiencyCompareOption = computed(() => {
+  const data = stats.value.cleaning_efficiency_compare || []
+  return {
+    tooltip: {
+      trigger: 'axis', axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        let html = params[0].axisValue + '<br/>'
+        params.forEach(p => {
+          html += `${p.marker} ${p.seriesName}: ${p.value}%<br/>`
+        })
+        const imp = data[params[0].dataIndex]
+        if (imp && imp.improvement) {
+          html += `<b style="color:#22c55e">提升: +${imp.improvement}%</b>`
+        }
+        return html
+      }
+    },
+    legend: { data: ['清洁前效率', '清洁后效率'], top: 0 },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: data.map(d => d.month) },
+    yAxis: { type: 'value', name: '%', min: 0, max: 100 },
+    series: [
+      {
+        name: '清洁前效率', type: 'bar',
+        data: data.map(d => d.before_cleaning),
+        itemStyle: { color: '#ef4444' },
+        label: { show: true, position: 'top', formatter: '{c}%', fontSize: 10 }
+      },
+      {
+        name: '清洁后效率', type: 'bar',
+        data: data.map(d => d.after_cleaning),
+        itemStyle: { color: '#22c55e' },
+        label: { show: true, position: 'top', formatter: '{c}%', fontSize: 10 }
+      }
+    ]
+  }
+})
+
+const panelCleaningRankingOption = computed(() => {
+  const ranking = stats.value.panel_cleaning_ranking || []
+  const sorted = [...ranking].sort((a, b) => a.revenue - b.revenue)
+  const names = sorted.map(r => r.name)
+  const revenues = sorted.map(r => r.revenue)
+  const recovered = sorted.map(r => r.recovered_kwh)
+  return {
+    tooltip: {
+      trigger: 'axis', axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        const idx = params[0].dataIndex
+        const item = sorted[idx]
+        return `${item.name}<br/>
+          清洁次数: ${item.count} 次<br/>
+          收益恢复: +¥${item.revenue}<br/>
+          发电恢复: +${item.recovered_kwh} kWh`
+      }
+    },
+    legend: { data: ['收益恢复(元)', '发电恢复(kWh)'], top: 0 },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: [
+      { type: 'value', name: '元', position: 'bottom' },
+      { type: 'value', name: 'kWh', position: 'top' }
+    ],
+    yAxis: { type: 'category', data: names },
+    series: [
+      {
+        name: '收益恢复(元)', type: 'bar', xAxisIndex: 0,
+        data: revenues,
+        itemStyle: { color: '#8b5cf6', borderRadius: [0, 4, 4, 0] },
+        label: { show: true, position: 'right', formatter: '+¥{c}', fontSize: 11, fontWeight: 600 }
+      },
+      {
+        name: '发电恢复(kWh)', type: 'bar', xAxisIndex: 1,
+        data: recovered,
+        itemStyle: { color: '#06b6d4', opacity: 0.7, borderRadius: [0, 4, 4, 0] }
       }
     ]
   }
